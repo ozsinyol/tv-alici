@@ -37,6 +37,9 @@ interface VideoEvents {
     fun videoSeek(seconds: Double)
     fun videoStop()
     fun videoInfo(): VideoInfo
+
+    /** Fotograf AirPlay: JPEG'i ekranda gosterir. */
+    fun showPhoto(jpeg: ByteArray)
 }
 
 /** /playback-info yaniti icin oynatici anlik durumu. */
@@ -73,6 +76,9 @@ class AirPlayServer(
 
     @Volatile
     private var videoSessionId: String? = null
+
+    // iPhone fotografi once onbellege yollayip sonra "goster" diyebilir; son birkacini tut.
+    private val photoCache = LinkedHashMap<String, ByteArray>()
 
     // Ag yazmalari ana is parcacigindan yapilamaz; olaylar sirayla tek bir is parcaciginda gider.
     private val eventExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
@@ -488,6 +494,40 @@ class AirPlayServer(
                     d.put("seekableTimeRanges", NSArray(seek))
                 }
                 send(out, proto, 200, "OK", BinaryPropertyListWriter.writeToArray(d), plist, cseq)
+                return true
+            }
+            method == "PUT" && path == "/photo" -> {
+                val key = headers["x-apple-assetkey"]
+                val action = headers["x-apple-assetaction"]
+                log("  /photo anahtar=${key ?: "-"} eylem=${action ?: "-"} (${body.size} B)")
+                var bytes: ByteArray? = if (body.isNotEmpty()) body else null
+                if (key != null) {
+                    synchronized(photoCache) {
+                        if (bytes != null) {
+                            photoCache[key] = bytes!!
+                            while (photoCache.size > 5) {
+                                val iter = photoCache.entries.iterator()
+                                iter.next()
+                                iter.remove()
+                            }
+                        } else {
+                            bytes = photoCache[key]
+                        }
+                    }
+                }
+                val b = bytes
+                when {
+                    action.equals("cacheOnly", ignoreCase = true) ->
+                        send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                    b == null -> {
+                        log("  /photo: önbellekte yok, iPhone yeniden gönderecek")
+                        send(out, proto, 412, "Precondition Failed", ByteArray(0), null, cseq)
+                    }
+                    else -> {
+                        send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                        video.showPhoto(b)
+                    }
+                }
                 return true
             }
             method == "POST" && path == "/rate" -> {

@@ -9,6 +9,7 @@ import java.io.IOException
  * GET  /               -> video secme ve kumanda sayfasi
  * PUT  /upload         -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
  * POST /control?cmd=.. -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop)
+ * GET  /trusted?pin=..[&forget=IP | &clear=1] -> AirPlay icin guvenilen cihazlari listeler/siler
  * Yukleme ve kumanda isteklerinde X-Pin basligi TV'de gosterilen PIN ile eslesmelidir.
  */
 class VideoServer(
@@ -16,7 +17,8 @@ class VideoServer(
     private val dir: File,
     private val pin: String,
     private val onUploadStart: (Upload) -> Unit,
-    private val onControl: (String) -> Unit
+    private val onControl: (String) -> Unit,
+    private val trust: TrustAdmin
 ) : NanoHTTPD(port) {
 
     override fun serve(session: IHTTPSession): Response {
@@ -28,8 +30,26 @@ class VideoServer(
                 if (session.parms["pin"] != pin) text("PIN yanlış (/log?pin=XXXX)", Response.Status.UNAUTHORIZED)
                 else text(LogBuffer.dump())
             }
+            path == "/trusted" -> handleTrusted(session)
             else -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", PAGE)
         }
+    }
+
+    private fun handleTrusted(session: IHTTPSession): Response {
+        if (session.parms["pin"] != pin) return text("PIN yanlış (/trusted?pin=XXXX)", Response.Status.UNAUTHORIZED)
+        session.parms["forget"]?.let { trust.forget(it) }
+        if (session.parms["clear"] == "1") trust.forgetAll()
+        val base = "/trusted?pin=$pin"
+        val rows = trust.trustedList().joinToString("") { line ->
+            val ip = line.substringBefore(' ')
+            "<li>$line <a href=\"$base&forget=$ip\">Sil</a></li>"
+        }.ifEmpty { "<li>Kayıtlı cihaz yok.</li>" }
+        val html = "<!doctype html><html lang=\"tr\"><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+            "<title>Güvenilen cihazlar</title></head><body style=\"font-family:-apple-system,sans-serif;padding:24px\">" +
+            "<h2>Güvenilen cihazlar</h2><ul>$rows</ul>" +
+            "<p><a href=\"$base&clear=1\">Hepsini sil</a></p></body></html>"
+        return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", html)
     }
 
     private fun pinOk(session: IHTTPSession): Boolean = session.headers["x-pin"] == pin

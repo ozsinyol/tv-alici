@@ -9,6 +9,13 @@ interface ApprovalGate {
     fun check(ip: String): Boolean
 }
 
+/** Guvenilen cihaz listesini yonetme (web sayfasindan). */
+interface TrustAdmin {
+    fun trustedList(): List<String>
+    fun forget(ip: String)
+    fun forgetAll()
+}
+
 /**
  * Ayni agdaki herkesin TV'ye baglanmasini engeller: bilinmeyen bir iPhone baglanmak isteyince
  * TV'de "Izin ver / Hep izin ver / Reddet" penceresi cikar. Karar IP adresine baglidir.
@@ -18,7 +25,7 @@ class Approvals(
     /** TV'de pencereyi acar; kullanici cevap verince answer cagrilir. Donen islev pencereyi kapatir. */
     private val ask: (ip: String, answer: (Result) -> Unit) -> (() -> Unit),
     private val log: (String) -> Unit
-) : ApprovalGate {
+) : ApprovalGate, TrustAdmin {
 
     enum class Result { ONCE, ALWAYS, DENY }
 
@@ -66,6 +73,31 @@ class Approvals(
     private fun isAllowed(ip: String): Boolean = ip in allowedNow
 
     private fun trusted(): Set<String> = prefs.getStringSet("trusted", emptySet()) ?: emptySet()
+
+    /** "ip (kalici)" ya da "ip (bu acilista)" bicimli satirlar. */
+    @Synchronized
+    override fun trustedList(): List<String> {
+        val perm = trusted()
+        return (perm + allowedNow).sorted().map { ip ->
+            if (ip in perm) "$ip (kalıcı)" else "$ip (bu açılışta)"
+        }
+    }
+
+    @Synchronized
+    override fun forget(ip: String) {
+        prefs.edit().putStringSet("trusted", trusted() - ip).apply()
+        allowedNow.remove(ip)
+        deniedUntil.remove(ip)
+        log("Güvenilen cihaz silindi: $ip")
+    }
+
+    @Synchronized
+    override fun forgetAll() {
+        prefs.edit().remove("trusted").apply()
+        allowedNow.clear()
+        deniedUntil.clear()
+        log("Tüm güvenilen cihazlar silindi")
+    }
 
     override fun check(ip: String): Boolean {
         return when (val b = begin(ip)) {

@@ -2,6 +2,7 @@ package com.example.tvalici
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.AudioManager
 import android.net.Uri
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
             runOnUiThread {
                 player?.stop()
                 airplayVideoActive = false
+                photoView.visibility = android.view.View.GONE
                 overlayView.visibility = android.view.View.GONE
             }
         }
@@ -83,6 +85,15 @@ class MainActivity : AppCompatActivity(), VideoEvents {
 
     private val port = 8080
     private val airplayPort = 7000
+
+    private val approvals: Approvals by lazy {
+        Approvals(
+            getSharedPreferences("airplay", Context.MODE_PRIVATE),
+            { ip, answer -> askApproval(ip, answer) },
+            { msg -> appendLog(msg) }
+        )
+    }
+    private lateinit var photoView: ImageView
 
     // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -155,7 +166,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
 
         val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
         val label = TextView(this).apply {
-            text = "iPhone kamerasiyla QR'i okutun\n$url  PIN: $pin\nGünlük: $url/log?pin=$pin"
+            text = "iPhone kamerasiyla QR'i okutun\n$url  PIN: $pin\nGünlük: $url/log?pin=$pin\nGüvenilen cihazlar: $url/trusted?pin=$pin"
             textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -185,12 +196,18 @@ class MainActivity : AppCompatActivity(), VideoEvents {
                 }
             })
         }
+        photoView = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+            visibility = android.view.View.GONE
+        }
         rootLayout = FrameLayout(this).apply {
             addView(playerView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(
                 mirrorView,
                 FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT, Gravity.CENTER)
             )
+            addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
@@ -201,7 +218,8 @@ class MainActivity : AppCompatActivity(), VideoEvents {
                 cacheDir,
                 pin,
                 { upload -> runOnUiThread { play(upload) } },
-                { cmd -> runOnUiThread { control(cmd) } }
+                { cmd -> runOnUiThread { control(cmd) } },
+                approvals
             ).also { it.start() }
         } catch (e: Exception) {
             appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
@@ -209,11 +227,6 @@ class MainActivity : AppCompatActivity(), VideoEvents {
 
         try {
             val airplayInfo = AirPlayInfo.load(this, "TV Alici")
-            val approvals = Approvals(
-                getSharedPreferences("airplay", Context.MODE_PRIVATE),
-                { ip, answer -> askApproval(ip, answer) },
-                { msg -> appendLog(msg) }
-            )
             airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents, this, approvals) { msg -> appendLog(msg) }
                 .also { it.start() }
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
@@ -233,6 +246,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
             val p = player ?: return@runOnUiThread
             // Yansitma yuzeyi eski kareyi tutabilir: videoyu kapatmasin diye 1x1'e kucult.
             mirrorView.layoutParams = FrameLayout.LayoutParams(1, 1, Gravity.CENTER)
+            photoView.visibility = android.view.View.GONE
             overlayView.visibility = android.view.View.GONE
             pendingStartSec = startSeconds
             pendingStartFrac = startFraction
@@ -270,12 +284,44 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     override fun videoStop() {
         runOnUiThread {
             player?.stop()
+            photoView.visibility = android.view.View.GONE
             overlayView.visibility = android.view.View.VISIBLE
             endAirplayVideo(notify = false)
         }
     }
 
     override fun videoInfo(): VideoInfo = videoSnapshot
+
+    override fun showPhoto(jpeg: ByteArray) {
+        val bmp = decodeScaled(jpeg)
+        if (bmp == null) {
+            appendLog("Fotoğraf çözülemedi (${jpeg.size} B)")
+            return
+        }
+        runOnUiThread {
+            player?.stop()
+            if (airplayVideoActive) endAirplayVideo(notify = false)
+            mirrorView.layoutParams = FrameLayout.LayoutParams(1, 1, Gravity.CENTER)
+            photoView.setImageBitmap(bmp)
+            photoView.visibility = android.view.View.VISIBLE
+            overlayView.visibility = android.view.View.GONE
+            appendLog("Fotoğraf gösteriliyor ${bmp.width}x${bmp.height}")
+        }
+    }
+
+    /** Buyuk fotograflar bellegi tasirmasin diye en uzun kenar ~2560 pikseli gecmeyecek sekilde acilir. */
+    private fun decodeScaled(data: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / sample > 2560 || bounds.outHeight / sample > 2560) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        return try {
+            BitmapFactory.decodeByteArray(data, 0, data.size, opts)
+        } catch (e: OutOfMemoryError) {
+            null
+        }
+    }
 
     private fun reportVideoState(state: String) {
         if (state == lastVideoState) return
@@ -406,6 +452,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     override fun onBackPressed() {
         if (overlayView.visibility == android.view.View.GONE) {
             player?.stop()
+            photoView.visibility = android.view.View.GONE
             if (airplayVideoActive) endAirplayVideo()
             airplayServer?.stopAllMirrors()
             overlayView.visibility = android.view.View.VISIBLE

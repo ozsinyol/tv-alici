@@ -36,6 +36,12 @@ Ekran yansıtırken ses görüntüyle kayık geliyorsa TV kumandasında **SAĞ/S
 
 Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep izin ver / Reddet** penceresi çıkar (uzaktan kumandayla seçilir). 30 saniye içinde cevap gelmezse ya da reddedilirse bağlantı kesilir ve aynı cihaz 1 dakika boyunca tekrar sorulmaz. "Hep izin ver" cihazın IP adresini kalıcı olarak güvenilir yapar.
 
+Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
+
+## Fotoğraf AirPlay (`/photo`)
+
+Fotoğraflar'da bir fotoğrafı açıp Paylaş > AirPlay > "TV Alici" ile TV'ye gönderin; fotoğraf tam ekran gösterilir. Geri tuşu ya da iPhone'dan durdurma ile QR ekranına dönülür. Slayt gösterisi (`/slideshows`) desteklenmez.
+
 ## Video AirPlay (`/play`)
 
 Fotoğraflar uygulamasında bir videoyu açıp AirPlay simgesinden "TV Alici"yı seçince video TV'ye gönderilir ve ExoPlayer ile oynatılır (düz MP4 ve HLS). iPhone'un oynat/duraklat/ileri-geri sar komutları desteklenir. Yalnızca `http(s)` adresleri oynatılır; `mlhls://` gibi FairPlay korumalı akışlar (ör. YouTube) desteklenmez. Ekran yansıtmadan farkı: görüntüyü TV kendisi indirip çözer, bu yüzden kalite daha iyi, iPhone pili daha az harcanır.
