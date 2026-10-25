@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
 
         override fun mirrorStarted() {
             mirrorActive = true
+            logWifi()
             runOnUiThread {
                 player?.stop()
                 airplayVideoActive = false
@@ -121,6 +122,8 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         SyncSettings.offsetMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
             .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
+        SyncSettings.jitterBufferMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
+            .getInt("jitterBufferMs", SyncSettings.DEFAULT_JITTER_MS).coerceIn(0, SyncSettings.MAX_JITTER_MS)
 
         val playerView = PlayerView(this)
         // Video AirPlay (/play): varsayilan 2,5 sn / 5 sn yerine daha erken baslat ve takilma sonrasi daha cabuk devam et.
@@ -433,8 +436,37 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         }
     }
 
+    /** Wi-Fi bandi, sinyal ve baglanti hizi gunluge yazilir (titreme teshisi icin). */
+    private fun logWifi() {
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return
+            @Suppress("DEPRECATION")
+            val i = wm.connectionInfo ?: return
+            val f = i.frequency
+            val band = when {
+                f >= 5925 -> "6 GHz"
+                f >= 4900 -> "5 GHz"
+                f > 0 -> "2,4 GHz"
+                else -> "bilinmiyor"
+            }
+            appendLog("Wi-Fi: $band ($f MHz), sinyal ${i.rssi} dBm, bağlantı hızı ${i.linkSpeed} Mbps")
+        } catch (e: Exception) {
+            appendLog("Wi-Fi bilgisi okunamadı: ${e.javaClass.simpleName}")
+        }
+    }
+
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+            val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
+            val v = (SyncSettings.jitterBufferMs + step).coerceIn(0, SyncSettings.MAX_JITTER_MS)
+            SyncSettings.jitterBufferMs = v
+            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", v).apply()
+            val text = if (v == 0) "Görüntü tamponu: kapalı" else "Görüntü tamponu: $v ms (ses de aynı kadar gecikir)"
+            appendLog(text)
+            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+            return true
+        }
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_LEFT)) {
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
             val v = (SyncSettings.offsetMs + step).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)

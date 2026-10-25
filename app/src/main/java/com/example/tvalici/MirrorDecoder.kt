@@ -24,7 +24,10 @@ class MirrorDecoder(
     private val startCode = byteArrayOf(0, 0, 0, 1)
 
     // Ses/goruntu ayari: kareler geldikleri andan itibaren SyncSettings.videoDelayMs kadar bekletilir.
-    private class Frame(val data: ByteArray, val len: Int, val arrivedNs: Long)
+    // targetNs: tampon acikken karenin cizilmesi gereken an (0: tampon yok, arrivedNs kullanilir).
+    private class Frame(val data: ByteArray, val len: Int, val arrivedNs: Long, val targetNs: Long) {
+        val baseNs: Long get() = if (targetNs != 0L && targetNs - arrivedNs <= 500_000_000L) targetNs else arrivedNs
+    }
 
     private val queue = java.util.concurrent.LinkedBlockingQueue<Frame>()
 
@@ -50,7 +53,7 @@ class MirrorDecoder(
                     null
                 }) ?: continue
                 while (!released) {
-                    val remaining = f.arrivedNs + SyncSettings.videoDelayMs * 1_000_000L - System.nanoTime()
+                    val remaining = f.baseNs + SyncSettings.videoDelayMs * 1_000_000L - System.nanoTime()
                     if (remaining <= 0) break
                     java.util.concurrent.locks.LockSupport.parkNanos(minOf(remaining, 10_000_000L))
                 }
@@ -172,16 +175,20 @@ class MirrorDecoder(
      *  - anahtar kare geldiginde (ayar gecikmesi yokken) onundeki bekleyen kareler gereksizdir, referans bozulmaz;
      *  - birikme sinirini asarsa kuyruk bosaltilir ve sonraki anahtar kareye kadar P kareler beklenmez.
      */
-    fun feed(data: ByteArray, len: Int, idr: Boolean) {
+    fun feed(data: ByteArray, len: Int, idr: Boolean, targetNs: Long) {
         if (released) return
         if (waitKey) {
             if (!idr) return
             waitKey = false
         }
         val backlog = if (outputStarted) queue.size else 0
-        val cap = MAX_BACKLOG + SyncSettings.videoDelayMs / 10
+        val cap = MAX_BACKLOG + (SyncSettings.videoDelayMs + SyncSettings.jitterBufferMs) / 8
+        // "Geride": kuyruktaki en eski karenin cizim zamani 50 ms'den fazla gecmis (tampon icinde bekleyen kareler geride sayilmaz).
+        val behind = backlog >= 2 && queue.peek()?.let {
+            System.nanoTime() - it.baseNs - SyncSettings.videoDelayMs * 1_000_000L > 50_000_000L
+        } == true
         if (idr) {
-            if ((SyncSettings.videoDelayMs == 0 && backlog >= 2) || backlog > cap) {
+            if ((SyncSettings.videoDelayMs == 0 && behind) || backlog > cap) {
                 queue.clear()
                 skipped += backlog
                 log("Birikme giderildi: $backlog kare atlandı (toplam $skipped)")
@@ -193,7 +200,7 @@ class MirrorDecoder(
             log("Çözücü yetişemedi: $backlog kare atıldı, anahtar kare bekleniyor")
             return
         }
-        queue.add(Frame(data, len, System.nanoTime()))
+        queue.add(Frame(data, len, System.nanoTime(), targetNs))
     }
 
     /**

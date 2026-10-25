@@ -77,6 +77,7 @@ class MirrorReceiver(
 
     fun stop() {
         running = false
+        SyncSettings.mirrorLive = false
         try {
             client?.close()
         } catch (e: Exception) {
@@ -106,9 +107,13 @@ class MirrorReceiver(
         var arr0 = 0L
         var ts0 = 0L
         var lastTs = 0L
-        var minDNs = Long.MAX_VALUE
-        var jitMaxNs = 0L
-        var jitOver30 = 0
+        // Titreme tamponu: d = varis - (iPhone zaman damgasi); en kucuk d (kayan pencere) = ag gecikmesinin en iyi hali.
+        // j = d - enKucukD = bu karenin ek gecikmesi. Cizim zamani = varis - j + tampon: kare ne kadar gec gelirse gelsin
+        // (j < tampon ise) ayni ritimde cizilir.
+        var winStartNs = 0L
+        var curMinD = Long.MAX_VALUE
+        var prevMinD = Long.MAX_VALUE
+        val jitSamples = LongArray(300)
         var srcGapOver50 = 0
         while (running) {
             input.readFully(header)
@@ -146,20 +151,38 @@ class MirrorReceiver(
                         }
                         lastArrivalNs = now
                         val ts = hb.getLong(8)
+                        val bufferNs = SyncSettings.jitterBufferMs * 1_000_000L
+                        var j = 0L
                         if (frames == 0) {
                             arr0 = now
                             ts0 = ts
+                            winStartNs = now
+                            SyncSettings.mirrorLive = true
                         } else {
                             val tsRelNs = ((ts - ts0).toDouble() * 1e9 / 4294967296.0).toLong()
                             val d = (now - arr0) - tsRelNs
-                            if (d < minDNs) minDNs = d
-                            val j = d - minDNs
-                            if (j > jitMaxNs) jitMaxNs = j
-                            if (j > 30_000_000L) jitOver30++
+                            if (d < curMinD) curMinD = d
+                            if (now - winStartNs > 10_000_000_000L) { // 10 sn'lik pencere: saat kaymasi / yol degisimine uyum
+                                prevMinD = curMinD
+                                curMinD = d
+                                winStartNs = now
+                            }
+                            j = d - minOf(curMinD, prevMinD)
+                            if (j > 3_000_000_000L) {
+                                // Zaman damgasi hizasi bozuldu (saat atlamasi vb.): capayi yeniden kur.
+                                arr0 = now
+                                ts0 = ts
+                                curMinD = Long.MAX_VALUE
+                                prevMinD = Long.MAX_VALUE
+                                winStartNs = now
+                                j = 0L
+                            }
                             if ((ts - lastTs).toDouble() * 1000.0 / 4294967296.0 > 50.0) srcGapOver50++
                         }
+                        jitSamples[frames % 300] = j
                         lastTs = ts
-                        decoder.feed(payload, size, kind == FRAME_IDR)
+                        val targetNs = if (bufferNs > 0) now - j + bufferNs else 0L
+                        decoder.feed(payload, size, kind == FRAME_IDR, targetNs)
                         frames++
                         if (frames == 1) log("İlk kare çözücüye verildi")
                         if (frames % 300 == 0) {
@@ -168,12 +191,15 @@ class MirrorReceiver(
                                 "Kare sayısı: $frames | varış aralığı ort ${avg / 1000}.${(avg % 1000) / 100} ms, " +
                                     "en büyük ${gapMaxNs / 1_000_000} ms, 50 ms üstü: $gapOver50"
                             )
+                            val sorted = jitSamples.copyOf().also { it.sort() }
+                            val over = sorted.count { it > bufferNs }
                             log(
-                                "Titreme kaynağı: ağ titremesi en çok ${jitMaxNs / 1_000_000} ms " +
-                                    "(30 ms üstü: $jitOver30 kare) | iPhone'da 50 ms üstü boşluk: $srcGapOver50"
+                                "Titreme: p50 ${fmtMs(sorted[149])}, p95 ${fmtMs(sorted[284])}, p99 ${fmtMs(sorted[296])}, " +
+                                    "en çok ${fmtMs(sorted[299])} ms | tampon ${SyncSettings.jitterBufferMs} ms, " +
+                                    "tamponu aşan kare: $over/300 | iPhone'da 50 ms üstü boşluk: $srcGapOver50"
                             )
                             gapSumNs = 0L; gapMaxNs = 0L; gapCount = 0; gapOver50 = 0
-                            jitMaxNs = 0L; jitOver30 = 0; srcGapOver50 = 0
+                            srcGapOver50 = 0
                         }
                     } else if (frames < 3) {
                         log("Kare biçimi geçersiz (anahtar yanlış olabilir)")
@@ -189,6 +215,8 @@ class MirrorReceiver(
      * AVCC (4 bayt uzunluk) -> Annex-B (00 00 00 01), yerinde.
      * Donus: FRAME_INVALID, FRAME_DELTA (P kare) ya da FRAME_IDR (anahtar kare, NAL turu 5 iceriyor).
      */
+    private fun fmtMs(ns: Long): String = "${ns / 1_000_000}.${(ns % 1_000_000) / 100_000}"
+
     private fun toAnnexB(data: ByteArray, size: Int): Int {
         var pos = 0
         var idr = false
