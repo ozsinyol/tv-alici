@@ -66,14 +66,14 @@ class MainActivity : AppCompatActivity() {
 
         val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
         val label = TextView(this).apply {
-            text = "iPhone kamerasiyla QR'i okutun\n$url\nPIN: $pin"
-            textSize = 24f
+            text = "iPhone kamerasiyla QR'i okutun\n$url  PIN: $pin\nGünlük: $url/log?pin=$pin"
+            textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
         logView = TextView(this).apply {
-            textSize = 14f
+            textSize = 12f
             setTextColor(Color.GRAY)
             gravity = Gravity.CENTER
             setPadding(0, 24, 0, 0)
@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
-            addView(qr, LinearLayout.LayoutParams(600, 600))
+            addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(logView, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
@@ -121,6 +121,7 @@ class MainActivity : AppCompatActivity() {
     /** Gecici hata ayiklama: son satirlari QR ekraninin altinda gosterir. */
     private fun appendLog(msg: String) {
         Log.i("AirPlay", msg)
+        LogBuffer.add(msg)
         runOnUiThread {
             logLines.add(msg)
             while (logLines.size > 8) logLines.removeAt(0)

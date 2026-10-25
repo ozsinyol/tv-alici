@@ -117,6 +117,22 @@ class AirPlayServer(
             send(out, proto, 200, "OK", infoPlist(), "application/x-apple-binary-plist", cseq)
             return
         }
+        if (method == "POST" && uri == "/fp-setup") {
+            // FairPlay el sikismasi: 16 bayt -> 142 bayt, 164 bayt -> 32 bayt.
+            val reply = when (body.size) {
+                16 -> AirPlayFairPlay.setup(body)
+                164 -> AirPlayFairPlay.handshake(body)
+                else -> null
+            }
+            if (reply != null) {
+                log("  fp-setup ${body.size} B tamam")
+                send(out, proto, 200, "OK", reply, octet, cseq)
+            } else {
+                log("  fp-setup reddedildi (${body.size} B)")
+                send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
+            }
+            return
+        }
         if (method == "POST" && uri == "/pair-setup") {
             // Istemci 32 bayt Ed25519 acik anahtarini yollar, biz kendimizinkini doneriz.
             send(out, proto, 200, "OK", airplay.publicKey, octet, cseq)
@@ -145,6 +161,11 @@ class AirPlayServer(
             .mapNotNull { k -> headers[k]?.let { "$k=$it" } }
             .joinToString(" ")
         log("  islenmedi: $interesting")
+        // Govde kucukse (ve metin/plist degilse bile) ilk baytlari logla: protokolu anlamak icin.
+        if (body.isNotEmpty()) {
+            val preview = body.take(48).joinToString("") { "%02x".format(it) }
+            log("  govde: $preview${if (body.size > 48) "..." else ""}")
+        }
         send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
     }
 

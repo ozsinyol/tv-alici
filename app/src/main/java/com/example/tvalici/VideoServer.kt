@@ -24,6 +24,10 @@ class VideoServer(
         return when {
             path == "/upload" && session.method == Method.PUT -> handleUpload(session)
             path == "/control" && session.method == Method.POST -> handleControl(session)
+            path == "/log" -> {
+                if (session.parms["pin"] != pin) text("PIN yanlış (/log?pin=XXXX)", Response.Status.UNAUTHORIZED)
+                else text(LogBuffer.dump())
+            }
             else -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", PAGE)
         }
     }
