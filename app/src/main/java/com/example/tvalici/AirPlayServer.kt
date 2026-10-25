@@ -50,8 +50,11 @@ class AirPlayServer(
         var keyMsg: ByteArray? = null // /fp-setup 2. asama mesaji (164 B)
         var ecdhSecret: ByteArray? = null // pair-verify X25519 ortak sirri
         var aesKey: ByteArray? = null
+        var aesIv: ByteArray? = null // SETUP 1'deki eiv (ses AES-CBC IV'si)
         var ntp: NtpClient? = null
         var mirror: MirrorReceiver? = null
+        var audio: AudioReceiver? = null
+        var volumeDb = 0f
         val udp = mutableListOf<DatagramSocket>()
 
         fun stopMirror(): Boolean {
@@ -61,6 +64,11 @@ class AirPlayServer(
             return true
         }
 
+        fun stopAudio() {
+            audio?.stop()
+            audio = null
+        }
+
         fun closeUdp() {
             udp.forEach { runCatching { it.close() } }
             udp.clear()
@@ -68,6 +76,7 @@ class AirPlayServer(
 
         fun closeAll(): Boolean {
             val hadMirror = stopMirror()
+            stopAudio()
             closeUdp()
             ntp?.stop()
             ntp = null
@@ -243,14 +252,29 @@ class AirPlayServer(
                 )
                 return
             }
-            "FLUSH", "SET_PARAMETER" -> {
+            "FLUSH" -> {
+                s.audio?.flush()
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return
+            }
+            "SET_PARAMETER" -> {
+                val text = String(body, Charsets.ISO_8859_1)
+                if (text.startsWith("volume:")) {
+                    val db = text.removePrefix("volume:").trim().toFloatOrNull()
+                    if (db != null) {
+                        s.volumeDb = db
+                        s.audio?.setVolumeDb(db)
+                        log("  ses seviyesi $db dB")
+                    }
+                }
                 send(out, proto, 200, "OK", ByteArray(0), null, cseq)
                 return
             }
             "GET_PARAMETER" -> {
                 val text = String(body, Charsets.ISO_8859_1)
                 if (text.startsWith("volume")) {
-                    send(out, proto, 200, "OK", "volume: 0.000000\r\n".toByteArray(), "text/parameters", cseq)
+                    val reply = "volume: %.6f\r\n".format(java.util.Locale.US, s.volumeDb)
+                    send(out, proto, 200, "OK", reply.toByteArray(), "text/parameters", cseq)
                 } else {
                     send(out, proto, 200, "OK", ByteArray(0), null, cseq)
                 }
@@ -322,6 +346,7 @@ class AirPlayServer(
                 decrypted
             }
             s.aesKey = aes
+            s.aesIv = eiv.copyOf()
             log("  SETUP 1: yayın anahtarı hazır")
 
             val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
@@ -374,15 +399,44 @@ class AirPlayServer(
                         respStreams.add(rd)
                     }
                     96 -> {
-                        // Ses henuz desteklenmiyor: portlari ac, gelen veriyi yok say.
                         val data = DatagramSocket()
                         val control = DatagramSocket()
-                        s.udp.add(data)
-                        s.udp.add(control)
-                        log("  SETUP 96: ses akışı yok sayılıyor")
+                        // Portlari simdi oku: alici baslatilamazsa soketler kapanir ve localPort -1 olur.
+                        val dataPort = data.localPort
+                        val controlPort = control.localPort
+                        var ct = (d.objectForKey("ct") as? NSNumber)?.intValue() ?: 0
+                        val audioFormat = (d.objectForKey("audioFormat") as? NSNumber)?.longValue() ?: 0L
+                        if (ct == 0) {
+                            // ct gelmediyse audioFormat bitlerinden cikar.
+                            ct = when (audioFormat) {
+                                0x1000000L -> 8 // AAC-ELD
+                                0x400000L -> 4 // AAC-LC
+                                0x40000L -> 2 // ALAC
+                                else -> 0
+                            }
+                        }
+                        val spf = (d.objectForKey("spf") as? NSNumber)?.intValue() ?: 0
+                        log("  SETUP 96: ct=$ct spf=$spf audioFormat=0x${audioFormat.toString(16)}")
+                        val aes = s.aesKey
+                        val iv = s.aesIv
+                        s.stopAudio()
+                        if (aes != null && iv != null) {
+                            val receiver = AudioReceiver(aes, iv, ct, data, control) { m -> log(m) }
+                            if (receiver.start()) {
+                                receiver.setVolumeDb(s.volumeDb)
+                                s.audio = receiver
+                            } else {
+                                s.udp.add(data)
+                                s.udp.add(control)
+                            }
+                        } else {
+                            log("  SETUP 96: yayın anahtarı yok, ses yok sayılıyor")
+                            s.udp.add(data)
+                            s.udp.add(control)
+                        }
                         val rd = NSDictionary()
-                        rd.put("dataPort", NSNumber(data.localPort))
-                        rd.put("controlPort", NSNumber(control.localPort))
+                        rd.put("dataPort", NSNumber(dataPort))
+                        rd.put("controlPort", NSNumber(controlPort))
                         rd.put("type", NSNumber(96))
                         respStreams.add(rd)
                     }
@@ -417,7 +471,10 @@ class AirPlayServer(
         log("  TEARDOWN 96=$has96 110=$has110")
         send(out, proto, 200, "OK", ByteArray(0), null, cseq, mapOf("Connection" to "close"))
         when {
-            has96 -> s.closeUdp()
+            has96 -> {
+                s.stopAudio()
+                s.closeUdp()
+            }
             has110 -> if (s.stopMirror()) events.mirrorStopped()
             else -> if (s.closeAll()) events.mirrorStopped()
         }
