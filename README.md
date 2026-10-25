@@ -18,6 +18,10 @@ TV uygulaması açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfa
 
 iPhone ve TV aynı Wi-Fi ağında olmalı.
 
+## İmza ve güncelleme güvenliği
+
+APK, yalnızca GitHub Secrets'ta duran özel bir anahtarla imzalanır (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); anahtar depoda yoktur. Anahtar yoksa workflow release yayınlamaz. Uygulama içi güncelleme, indirilen APK'nın paket adını, sürüm numarasını ve imza sertifikasının SHA-256 parmak izini (`app/build.gradle.kts` içindeki `UPDATE_CERT_SHA256`) kurmadan önce kontrol eder; uyuşmazsa APK silinir. Anahtar değiştirilirse bu parmak izi de güncellenmeli ve TV'deki uygulama bir kez silinip elle kurulmalıdır. Yerel (anahtarsız) derlemeler güncelleme doğrulamasından geçmez.
+
 ## Ekran yansıtma (AirPlay) ve lisans
 
 TV, ağda "TV Alici" adıyla bir AirPlay alıcısı olarak görünür; iPhone'un Denetim Merkezi'nden **Ekran Yansıtma** ile bağlanılır. Görüntü (H.264) ve ses (AAC-ELD) desteklenir. ALAC (Müzik uygulamasından AirPlay) desteklenmez. Ses ile görüntü arasındaki kayma elle ayarlanır (aşağıya bakın).

@@ -1,6 +1,7 @@
 package com.example.tvalici
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -13,6 +14,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 /**
@@ -65,12 +67,12 @@ class Updater(private val activity: AppCompatActivity) {
         AlertDialog.Builder(activity)
             .setTitle("Güncelleme var")
             .setMessage("Yeni sürüm: v$remote (şu an v${BuildConfig.VERSION_CODE}). İndirip kuralım mı?")
-            .setPositiveButton("Güncelle") { _, _ -> download(apkUrl) }
+            .setPositiveButton("Güncelle") { _, _ -> download(remote, apkUrl) }
             .setNegativeButton("Sonra", null)
             .show()
     }
 
-    private fun download(apkUrl: String) {
+    private fun download(remote: Int, apkUrl: String) {
         val dialog = AlertDialog.Builder(activity)
             .setTitle("Güncelleniyor")
             .setMessage("İndiriliyor...")
@@ -108,9 +110,16 @@ class Updater(private val activity: AppCompatActivity) {
                         }
                     }
                 }
+                val problem = verify(file, remote)
                 activity.runOnUiThread {
                     dialog.dismiss()
-                    install(file)
+                    if (problem == null) {
+                        install(file)
+                    } else {
+                        file.delete()
+                        Log.w(tag, "Guncelleme reddedildi: $problem")
+                        Toast.makeText(activity, "Güncelleme kurulmadı: $problem", Toast.LENGTH_LONG).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(tag, "Indirme basarisiz: ${e.message}")
@@ -120,6 +129,37 @@ class Updater(private val activity: AppCompatActivity) {
                 }
             }
         }
+    }
+
+    /**
+     * Indirilen APK'yi kurmadan once dogrular: paket adi, surum numarasi ve imza sertifikasinin
+     * SHA-256 parmak izi (BuildConfig.UPDATE_CERT_SHA256). Sorun yoksa null, varsa nedenini dondurur.
+     */
+    @Suppress("DEPRECATION")
+    private fun verify(file: File, remote: Int): String? {
+        val pm = activity.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= 28) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val info = pm.getPackageArchiveInfo(file.path, flags) ?: return "APK okunamadı"
+        if (info.packageName != activity.packageName) return "paket adı uyuşmuyor"
+        val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+        if (code != remote.toLong()) return "sürüm numarası uyuşmuyor"
+
+        val sigs = if (Build.VERSION.SDK_INT >= 28) {
+            val si = info.signingInfo ?: return "imza bilgisi yok"
+            if (si.hasMultipleSigners()) return "birden fazla imzacı"
+            si.apkContentsSigners
+        } else {
+            info.signatures
+        }
+        if (sigs == null || sigs.size != 1) return "imza bilgisi yok"
+        val digest = MessageDigest.getInstance("SHA-256").digest(sigs[0].toByteArray())
+        val hex = digest.joinToString("") { "%02x".format(it) }
+        if (!hex.equals(BuildConfig.UPDATE_CERT_SHA256, ignoreCase = true)) return "imza doğrulanamadı"
+        return null
     }
 
     private fun install(file: File) {
