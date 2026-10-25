@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -20,6 +21,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -59,6 +61,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         override fun mirrorSurface(): Surface? = this@MainActivity.mirrorSurface
 
         override fun mirrorStarted() {
+            mirrorActive = true
             runOnUiThread {
                 player?.stop()
                 airplayVideoActive = false
@@ -71,6 +74,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         }
 
         override fun mirrorStopped() {
+            mirrorActive = false
             runOnUiThread {
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
@@ -86,6 +90,9 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     @Volatile
     private var videoSnapshot = VideoInfo()
     private var airplayVideoActive = false
+
+    @Volatile
+    private var mirrorActive = false
     private var pendingStartSec = -1.0
     private var pendingStartFrac = -1.0
     private var lastVideoState = ""
@@ -100,6 +107,8 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        SyncSettings.offsetMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
+            .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
 
         val playerView = PlayerView(this)
         player = ExoPlayer.Builder(this).build().also { p ->
@@ -371,6 +380,25 @@ class MainActivity : AppCompatActivity(), VideoEvents {
                 overlayView.visibility = android.view.View.VISIBLE
             }
         }
+    }
+
+    /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_LEFT)) {
+            val step = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
+            val v = (SyncSettings.offsetMs + step).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
+            SyncSettings.offsetMs = v
+            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("syncOffsetMs", v).apply()
+            val text = when {
+                v > 0 -> "Ses/görüntü: görüntü $v ms gecikiyor"
+                v < 0 -> "Ses/görüntü: ses ${-v} ms gecikiyor"
+                else -> "Ses/görüntü: ayar yok (0 ms)"
+            }
+            appendLog(text)
+            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */

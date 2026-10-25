@@ -20,8 +20,8 @@ import kotlin.concurrent.thread
  *  - yukun tam 16 baytlik bloklari AES-128-CBC ile sifreli (her paketin IV'si ayni, eiv),
  *    kalan kuyruk bayt sifresiz
  *  - ct=8: AAC-ELD 44100 Hz stereo (yansitma), ct=4: AAC-LC, ct=2: ALAC (desteklenmiyor)
- * Ses MediaCodec ile cozulup AudioTrack ile calinir. Kayip paket istegi (resend) ve
- * goruntu ile hassas senkron yok; ses geldigi gibi calinir.
+ * Ses MediaCodec ile cozulup AudioTrack ile calinir. Kayip paket istegi (resend) yok. Goruntu ile
+ * senkron SyncSettings'teki elle ayarlanan kaydirma ile yapilir (TV'de SAG/SOL tuslari).
  */
 class AudioReceiver(
     aesKey: ByteArray,
@@ -47,6 +47,15 @@ class AudioReceiver(
     private var lastSeq = -1
     private var packets = 0
     private var ptsUs = 0L
+
+    // Ses/goruntu ayari: ses gecikmesi sessizlik yazarak artirilir, ornek atlayarak azaltilir.
+    @Volatile
+    private var outRate = 44100
+
+    @Volatile
+    private var outChannels = 2
+    private var appliedDelayMs = 0
+    private var skipBytes = 0
 
     /** Ses akisini baslatir. Codec desteklenmiyorsa false doner (ses yok sayilir). */
     fun start(): Boolean {
@@ -168,7 +177,15 @@ class AudioReceiver(
                             if (out != null && t != null && info.size > 0) {
                                 out.position(info.offset)
                                 out.limit(info.offset + info.size)
-                                t.write(out, info.size, AudioTrack.WRITE_BLOCKING)
+                                applyDelay(t)
+                                var n = info.size
+                                if (skipBytes > 0) {
+                                    val s = minOf(skipBytes, n)
+                                    out.position(info.offset + s)
+                                    skipBytes -= s
+                                    n -= s
+                                }
+                                if (n > 0) t.write(out, n, AudioTrack.WRITE_BLOCKING)
                             }
                             c.releaseOutputBuffer(i, false)
                         }
@@ -181,10 +198,29 @@ class AudioReceiver(
         }
     }
 
+    /** SyncSettings'teki ses gecikmesi degistiyse sessizlik ekler ya da kisa bir kismi atlar. */
+    private fun applyDelay(t: AudioTrack) {
+        val want = SyncSettings.audioDelayMs
+        if (want == appliedDelayMs) return
+        val frameBytes = outChannels * 2
+        if (want > appliedDelayMs) {
+            var bytes = (want - appliedDelayMs) * outRate / 1000 * frameBytes
+            val cancel = minOf(skipBytes, bytes)
+            skipBytes -= cancel
+            bytes -= cancel
+            if (bytes > 0) t.write(ByteBuffer.allocate(bytes), bytes, AudioTrack.WRITE_BLOCKING)
+        } else {
+            skipBytes += (appliedDelayMs - want) * outRate / 1000 * frameBytes
+        }
+        appliedDelayMs = want
+    }
+
     private fun createTrack(f: MediaFormat) {
         try {
             val rate = if (f.containsKey(MediaFormat.KEY_SAMPLE_RATE)) f.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44100
             val channels = if (f.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) f.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 2
+            outRate = rate
+            outChannels = channels
             val mask = if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
             val minBuf = AudioTrack.getMinBufferSize(rate, mask, AudioFormat.ENCODING_PCM_16BIT)
             val builder = AudioTrack.Builder()
@@ -237,6 +273,8 @@ class AudioReceiver(
             track?.pause()
             track?.flush()
             track?.play()
+            appliedDelayMs = 0 // bosalan arabellekle birlikte eklenen sessizlik de gitti
+            skipBytes = 0
         } catch (e: Exception) {
             // onemsiz
         }

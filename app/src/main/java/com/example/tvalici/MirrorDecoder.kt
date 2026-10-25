@@ -20,6 +20,32 @@ class MirrorDecoder(
 
     private val startCode = byteArrayOf(0, 0, 0, 1)
 
+    // Ses/goruntu ayari: kareler geldikleri andan itibaren SyncSettings.videoDelayMs kadar bekletilir.
+    private class Frame(val data: ByteArray, val len: Int, val arrivedNs: Long)
+
+    private val queue = java.util.concurrent.LinkedBlockingQueue<Frame>()
+
+    @Volatile
+    private var released = false
+
+    init {
+        thread(name = "mirror-sched", isDaemon = true) {
+            while (!released) {
+                val f = (try {
+                    queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } catch (e: InterruptedException) {
+                    null
+                }) ?: continue
+                while (!released) {
+                    val remaining = f.arrivedNs + SyncSettings.videoDelayMs * 1_000_000L - System.nanoTime()
+                    if (remaining <= 0) break
+                    java.util.concurrent.locks.LockSupport.parkNanos(minOf(remaining, 10_000_000L))
+                }
+                if (!released) feedNow(f.data, f.len)
+            }
+        }
+    }
+
     /** SPS/PPS degistiyse (ya da ilk kez geldiyse) cozucuyu yeniden kurar. */
     @Synchronized
     fun configure(sps: ByteArray, pps: ByteArray, width: Int, height: Int) {
@@ -88,9 +114,15 @@ class MirrorDecoder(
         }
     }
 
-    /** Annex-B bicimindeki bir kareyi cozucuye verir. */
-    @Synchronized
+    /** Annex-B bicimindeki bir kareyi sira ile (gecikme ayarina gore) cozucuye iletir. */
     fun feed(data: ByteArray, len: Int) {
+        if (released) return
+        if (queue.size > 200) queue.clear() // zamanlayici takildiysa birikmesin
+        queue.add(Frame(data, len, System.nanoTime()))
+    }
+
+    @Synchronized
+    private fun feedNow(data: ByteArray, len: Int) {
         val c = codec ?: return
         try {
             val idx = c.dequeueInputBuffer(20_000)
@@ -116,6 +148,8 @@ class MirrorDecoder(
 
     @Synchronized
     fun release() {
+        released = true
+        queue.clear()
         releaseCodec()
         currentSps = null
         currentPps = null
