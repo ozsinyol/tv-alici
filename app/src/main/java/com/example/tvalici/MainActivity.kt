@@ -1,7 +1,9 @@
 package com.example.tvalici
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -15,15 +17,23 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
-import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.security.SecureRandom
 
+@Suppress("UnsafeOptInUsageError")
 class MainActivity : AppCompatActivity() {
+
+    /** Her uygulama acilisinda yeni 4 haneli PIN; QR'a gomulu oldugu icin elle girmek gerekmez. */
+    private val pin = "%04d".format(SecureRandom().nextInt(10000))
 
     private var player: ExoPlayer? = null
     private var server: VideoServer? = null
@@ -42,13 +52,21 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val playerView = PlayerView(this)
-        player = ExoPlayer.Builder(this).build().also { playerView.player = it }
+        player = ExoPlayer.Builder(this).build().also { p ->
+            playerView.player = p
+            p.addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    appendLog("Oynatma hatası: ${error.errorCodeName}")
+                    overlayView.visibility = android.view.View.VISIBLE
+                }
+            })
+        }
 
         val url = "http://${localIp()}:$port"
 
-        val qr = ImageView(this).apply { setImageBitmap(qrBitmap(url, 600)) }
+        val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
         val label = TextView(this).apply {
-            text = "iPhone kamerasiyla QR'i okutun\n$url"
+            text = "iPhone kamerasiyla QR'i okutun\n$url\nPIN: $pin"
             textSize = 24f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -75,8 +93,13 @@ class MainActivity : AppCompatActivity() {
         })
 
         try {
-            server = VideoServer(port, cacheDir) { file -> runOnUiThread { play(file) } }
-                .also { it.start() }
+            server = VideoServer(
+                port,
+                cacheDir,
+                pin,
+                { upload -> runOnUiThread { play(upload) } },
+                { cmd -> runOnUiThread { control(cmd) } }
+            ).also { it.start() }
         } catch (e: Exception) {
             appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
         }
@@ -105,12 +128,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun play(file: File) {
+    /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    private fun play(upload: Upload) {
         overlayView.visibility = android.view.View.GONE
+        val factory = DataSource.Factory { GrowingFileDataSource(upload) }
+        val source = ProgressiveMediaSource.Factory(factory)
+            .createMediaSource(MediaItem.fromUri(Uri.fromFile(upload.file)))
         player?.apply {
-            setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+            setMediaSource(source)
             prepare()
             playWhenReady = true
+        }
+    }
+
+    /** Web sayfasindaki kumanda dugmeleri (her zaman ana is parcacigindan cagrilir). */
+    private fun control(cmd: String) {
+        val p = player ?: return
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        when (cmd) {
+            "playpause" -> if (p.isPlaying) p.pause() else p.play()
+            "back10" -> p.seekTo(maxOf(0L, p.currentPosition - 10_000L))
+            "fwd10" -> {
+                val target = p.currentPosition + 10_000L
+                val duration = p.duration
+                p.seekTo(if (duration > 0) minOf(target, duration) else target)
+            }
+            "volup" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI
+            )
+            "voldown" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI
+            )
+            "stop" -> {
+                p.stop()
+                overlayView.visibility = android.view.View.VISIBLE
+            }
         }
     }
 
