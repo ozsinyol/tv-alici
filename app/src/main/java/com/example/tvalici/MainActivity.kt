@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -26,8 +27,14 @@ class MainActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private var server: VideoServer? = null
     private lateinit var overlayView: LinearLayout
+    private lateinit var logView: TextView
+    private val logLines = mutableListOf<String>()
+
+    private var airplayServer: AirPlayServer? = null
+    private var airplayAdvertiser: AirPlayAdvertiser? = null
 
     private val port = 8080
+    private val airplayPort = 7000
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,12 +52,19 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        logView = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.GRAY)
+            gravity = Gravity.CENTER
+            setPadding(0, 24, 0, 0)
+        }
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
             addView(qr, LinearLayout.LayoutParams(600, 600))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(logView, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
         setContentView(FrameLayout(this).apply {
@@ -60,6 +74,22 @@ class MainActivity : AppCompatActivity() {
 
         server = VideoServer(port, cacheDir) { file -> runOnUiThread { play(file) } }
             .also { it.start() }
+
+        val airplayInfo = AirPlayInfo.load(this, "TV Alici")
+        airplayServer = AirPlayServer(airplayPort, airplayInfo) { msg -> appendLog(msg) }
+            .also { it.start() }
+        airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
+            .also { it.start() }
+    }
+
+    /** Gecici hata ayiklama: son satirlari QR ekraninin altinda gosterir. */
+    private fun appendLog(msg: String) {
+        Log.i("AirPlay", msg)
+        runOnUiThread {
+            logLines.add(msg)
+            while (logLines.size > 8) logLines.removeAt(0)
+            logView.text = logLines.joinToString("\n")
+        }
     }
 
     private fun play(file: File) {
@@ -84,6 +114,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         server?.stop()
+        airplayServer?.stop()
+        airplayAdvertiser?.stop()
         player?.release()
         super.onDestroy()
     }

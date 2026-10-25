@@ -29,4 +29,5 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.googlecode.plist:dd-plist:1.28")
 }
