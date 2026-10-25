@@ -101,6 +101,15 @@ class MirrorReceiver(
         var gapMaxNs = 0L
         var gapCount = 0
         var gapOver50 = 0
+        // Olcum: kare zaman damgasi (iPhone saati, 2^-32 sn) ile varis zamani farki = ag titremesi;
+        // zaman damgasinin kendisindeki bosluklar = kaynakta (iPhone) kare uretilmemesi.
+        var arr0 = 0L
+        var ts0 = 0L
+        var lastTs = 0L
+        var minDNs = Long.MAX_VALUE
+        var jitMaxNs = 0L
+        var jitOver30 = 0
+        var srcGapOver50 = 0
         while (running) {
             input.readFully(header)
             val hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
@@ -136,6 +145,20 @@ class MirrorReceiver(
                             gapCount++
                         }
                         lastArrivalNs = now
+                        val ts = hb.getLong(8)
+                        if (frames == 0) {
+                            arr0 = now
+                            ts0 = ts
+                        } else {
+                            val tsRelNs = ((ts - ts0).toDouble() * 1e9 / 4294967296.0).toLong()
+                            val d = (now - arr0) - tsRelNs
+                            if (d < minDNs) minDNs = d
+                            val j = d - minDNs
+                            if (j > jitMaxNs) jitMaxNs = j
+                            if (j > 30_000_000L) jitOver30++
+                            if ((ts - lastTs).toDouble() * 1000.0 / 4294967296.0 > 50.0) srcGapOver50++
+                        }
+                        lastTs = ts
                         decoder.feed(payload, size, kind == FRAME_IDR)
                         frames++
                         if (frames == 1) log("İlk kare çözücüye verildi")
@@ -145,7 +168,12 @@ class MirrorReceiver(
                                 "Kare sayısı: $frames | varış aralığı ort ${avg / 1000}.${(avg % 1000) / 100} ms, " +
                                     "en büyük ${gapMaxNs / 1_000_000} ms, 50 ms üstü: $gapOver50"
                             )
+                            log(
+                                "Titreme kaynağı: ağ titremesi en çok ${jitMaxNs / 1_000_000} ms " +
+                                    "(30 ms üstü: $jitOver30 kare) | iPhone'da 50 ms üstü boşluk: $srcGapOver50"
+                            )
                             gapSumNs = 0L; gapMaxNs = 0L; gapCount = 0; gapOver50 = 0
+                            jitMaxNs = 0L; jitOver30 = 0; srcGapOver50 = 0
                         }
                     } else if (frames < 3) {
                         log("Kare biçimi geçersiz (anahtar yanlış olabilir)")

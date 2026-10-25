@@ -34,6 +34,10 @@ class MirrorDecoder(
     // Birikme sonrasi bir sonraki anahtar kareye (IDR) kadar P kareler atilir (bozuk goruntu yerine kisa donma).
     @Volatile
     private var waitKey = false
+
+    // Cozucu ilk kareyi verene kadar (baslangicta ~0,6 sn) kuyruk dogal olarak birikir; koruma devreye girmez.
+    @Volatile
+    private var outputStarted = false
     private var skipped = 0
 
     init {
@@ -86,6 +90,7 @@ class MirrorDecoder(
             currentPps = pps
             ptsUs = 0L
             waitKey = false
+            outputStarted = false
             log("Çözücü hazır ${width}x$height")
             startDrain(c)
         } catch (e: Exception) {
@@ -115,6 +120,7 @@ class MirrorDecoder(
                                 outSkipped++
                             }
                             pending = i
+                            outputStarted = true
                             val arrived = inputNs[((info.presentationTimeUs / 16_667L) % 256).toInt()]
                             if (arrived != 0L) {
                                 val lat = System.nanoTime() - arrived
@@ -172,7 +178,7 @@ class MirrorDecoder(
             if (!idr) return
             waitKey = false
         }
-        val backlog = queue.size
+        val backlog = if (outputStarted) queue.size else 0
         val cap = MAX_BACKLOG + SyncSettings.videoDelayMs / 10
         if (idr) {
             if ((SyncSettings.videoDelayMs == 0 && backlog >= 2) || backlog > cap) {
@@ -190,22 +196,36 @@ class MirrorDecoder(
         queue.add(Frame(data, len, System.nanoTime()))
     }
 
-    @Synchronized
+    /**
+     * Kareyi cozucuye verir. Cozucu baslangicta ilk kareleri tutup giris tamponu vermeyebilir
+     * (kare yeniden siralama bekler, ~0,6 sn): kareyi atmak referanslari bozar, bu yuzden en fazla 1 sn beklenir.
+     * Kilit denemeler arasinda birakilir ki release()/configure() engellenmesin.
+     */
     private fun feedNow(data: ByteArray, len: Int, arrivedNs: Long) {
-        val c = codec ?: return
-        try {
-            val idx = c.dequeueInputBuffer(40_000)
-            if (idx < 0) {
+        val deadline = System.nanoTime() + 1_000_000_000L
+        while (!released) {
+            if (tryFeed(data, len, arrivedNs)) return
+            if (System.nanoTime() > deadline) {
                 dropped++
-                if (dropped % 30 == 1) log("Kare atlandı (toplam $dropped)")
+                log("Kare atlandı (toplam $dropped)")
                 return
             }
-            val buf = c.getInputBuffer(idx) ?: return
+        }
+    }
+
+    /** true: kare islendi (ya da yok sayilmasi gerekiyor); false: giris tamponu henuz yok, tekrar denenmeli. */
+    @Synchronized
+    private fun tryFeed(data: ByteArray, len: Int, arrivedNs: Long): Boolean {
+        val c = codec ?: return true
+        try {
+            val idx = c.dequeueInputBuffer(20_000)
+            if (idx < 0) return false
+            val buf = c.getInputBuffer(idx) ?: return true
             buf.clear()
             if (len > buf.capacity()) {
                 log("Kare çok büyük: $len")
                 c.queueInputBuffer(idx, 0, 0, ptsUs, 0)
-                return
+                return true
             }
             buf.put(data, 0, len)
             ptsUs += 16_667L
@@ -214,6 +234,7 @@ class MirrorDecoder(
         } catch (e: Exception) {
             log("Çözücü hatası: ${e.javaClass.simpleName} ${e.message}")
         }
+        return true
     }
 
     @Synchronized
