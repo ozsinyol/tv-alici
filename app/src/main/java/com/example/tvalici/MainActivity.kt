@@ -8,6 +8,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.WindowManager
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -43,6 +46,32 @@ class MainActivity : AppCompatActivity() {
 
     private var airplayServer: AirPlayServer? = null
     private var airplayAdvertiser: AirPlayAdvertiser? = null
+
+    // Ekran yansitma: MediaCodec bu yuzeye cizer.
+    private lateinit var rootLayout: FrameLayout
+    private lateinit var mirrorView: SurfaceView
+
+    @Volatile
+    private var mirrorSurface: Surface? = null
+
+    private val mirrorEvents = object : MirrorEvents {
+        override fun mirrorSurface(): Surface? = this@MainActivity.mirrorSurface
+
+        override fun mirrorStarted() {
+            runOnUiThread {
+                player?.stop()
+                overlayView.visibility = android.view.View.GONE
+            }
+        }
+
+        override fun mirrorSize(width: Int, height: Int) {
+            runOnUiThread { fitMirror(width, height) }
+        }
+
+        override fun mirrorStopped() {
+            runOnUiThread { overlayView.visibility = android.view.View.VISIBLE }
+        }
+    }
 
     private val port = 8080
     private val airplayPort = 7000
@@ -87,10 +116,31 @@ class MainActivity : AppCompatActivity() {
             addView(logView, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
-        setContentView(FrameLayout(this).apply {
+        mirrorView = SurfaceView(this).apply {
+            setZOrderMediaOverlay(true) // ExoPlayer yuzeyinin ustunde cizilsin
+            holder.addCallback(object : SurfaceHolder.Callback {
+                override fun surfaceCreated(h: SurfaceHolder) {
+                    mirrorSurface = h.surface
+                }
+
+                override fun surfaceChanged(h: SurfaceHolder, format: Int, w: Int, h2: Int) {
+                    mirrorSurface = h.surface
+                }
+
+                override fun surfaceDestroyed(h: SurfaceHolder) {
+                    mirrorSurface = null
+                }
+            })
+        }
+        rootLayout = FrameLayout(this).apply {
             addView(playerView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(
+                mirrorView,
+                FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT, Gravity.CENTER)
+            )
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        })
+        }
+        setContentView(rootLayout)
 
         try {
             server = VideoServer(
@@ -106,7 +156,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             val airplayInfo = AirPlayInfo.load(this, "TV Alici")
-            airplayServer = AirPlayServer(airplayPort, airplayInfo) { msg -> appendLog(msg) }
+            airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents) { msg -> appendLog(msg) }
                 .also { it.start() }
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
                 .also { it.start() }
@@ -116,6 +166,20 @@ class MainActivity : AppCompatActivity() {
 
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         Updater(this).check()
+    }
+
+    /** Yansitilan goruntuyu en-boy oranini bozmadan ekrana sigdirir (kenarlarda siyah bosluk). */
+    private fun fitMirror(videoW: Int, videoH: Int) {
+        val cw = rootLayout.width
+        val ch = rootLayout.height
+        if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
+        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
+        val lp = FrameLayout.LayoutParams(
+            (videoW * scale).toInt().coerceAtLeast(1),
+            (videoH * scale).toInt().coerceAtLeast(1),
+            Gravity.CENTER
+        )
+        mirrorView.layoutParams = lp
     }
 
     /** Gecici hata ayiklama: son satirlari QR ekraninin altinda gosterir. */
@@ -172,6 +236,7 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (overlayView.visibility == android.view.View.GONE) {
             player?.stop()
+            airplayServer?.stopAllMirrors()
             overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()

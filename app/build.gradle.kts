@@ -17,6 +17,18 @@ android {
         targetSdk = 34
         versionCode = appVersionCode
         versionName = "0.$appVersionCode"
+
+        // playfair (FairPlay yayin anahtari cozucu) icin yerel kutuphane.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildFeatures {

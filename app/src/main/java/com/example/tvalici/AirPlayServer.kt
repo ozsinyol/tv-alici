@@ -1,34 +1,79 @@
 package com.example.tvalici
 
 import android.util.Log
+import android.view.Surface
 import com.dd.plist.BinaryPropertyListWriter
+import com.dd.plist.NSArray
 import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 import com.dd.plist.NSNumber
+import com.dd.plist.NSObject
 import com.dd.plist.NSString
+import com.dd.plist.PropertyListParser
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.DatagramSocket
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.concurrent.thread
 
+/** Ekran yansitma olaylari (MainActivity uygular). Hangi is parcacigindan cagrilirsa cagrilsin. */
+interface MirrorEvents {
+    fun mirrorSurface(): Surface?
+    fun mirrorStarted()
+    fun mirrorSize(width: Int, height: Int)
+    fun mirrorStopped()
+}
+
 /**
- * AirPlay istek sunucusu (1. asama: kesif).
- * Su an yalnizca GET/POST /info isteklerini yanitlar; digerlerini loglar ve 501 doner.
- * Amac, iPhone'un TV'yi listede gostermesini saglamak ve hangi isteklerin
- * geldigini gormek. Eslesme (pair-setup/verify) ve /play sonraki asamalar.
+ * AirPlay sunucusu: /info, eslesme (pair-setup / pair-verify), FairPlay (/fp-setup) ve
+ * ekran yansitma icin RTSP istekleri (SETUP, RECORD, TEARDOWN ...). Ayni TCP baglantisinda
+ * HTTP ve RTSP istekleri karisik gelir; ikisi de ayni bicimde okunur.
  */
 class AirPlayServer(
     private val port: Int,
     private val airplay: AirPlayInfo,
+    private val events: MirrorEvents,
     private val onLog: (String) -> Unit
 ) {
     @Volatile
     private var running = false
     private var serverSocket: ServerSocket? = null
+    private val sessions = mutableSetOf<Session>()
+
+    /** Her TCP baglantisinin kendi eslesme ve yayin durumu vardir. */
+    private class Session(val socket: Socket) {
+        var keyMsg: ByteArray? = null // /fp-setup 2. asama mesaji (164 B)
+        var ecdhSecret: ByteArray? = null // pair-verify X25519 ortak sirri
+        var aesKey: ByteArray? = null
+        var ntp: NtpClient? = null
+        var mirror: MirrorReceiver? = null
+        val udp = mutableListOf<DatagramSocket>()
+
+        fun stopMirror(): Boolean {
+            val m = mirror ?: return false
+            mirror = null
+            m.stop()
+            return true
+        }
+
+        fun closeUdp() {
+            udp.forEach { runCatching { it.close() } }
+            udp.clear()
+        }
+
+        fun closeAll(): Boolean {
+            val hadMirror = stopMirror()
+            closeUdp()
+            ntp?.stop()
+            ntp = null
+            return hadMirror
+        }
+    }
 
     fun start() {
         running = true
@@ -54,6 +99,13 @@ class AirPlayServer(
         } catch (e: Exception) {
             // kapanirken hata onemsiz
         }
+        stopAllMirrors()
+    }
+
+    /** Geri tusu: acik yansitma baglantilarini kapatir. */
+    fun stopAllMirrors() {
+        val copy = synchronized(sessions) { sessions.toList() }
+        for (s in copy) s.closeAll()
     }
 
     private fun log(msg: String) {
@@ -63,6 +115,8 @@ class AirPlayServer(
 
     private fun handle(socket: Socket) {
         log("Baglanti: ${socket.inetAddress.hostAddress}")
+        val session = Session(socket)
+        synchronized(sessions) { sessions.add(session) }
         try {
             socket.use { s ->
                 val input = BufferedInputStream(s.getInputStream())
@@ -94,16 +148,24 @@ class AirPlayServer(
                         read += n
                     }
 
-                    log("$method $uri ($length B)")
-                    respond(out, proto, method, uri, headers, body)
+                    // Sik gelen nabiz isteklerini loglama.
+                    if (uri != "/feedback") log("$method ${shortUri(uri)} ($length B)")
+                    respond(session, out, proto, method, uri, headers, body)
                 }
             }
         } catch (e: Exception) {
             log("Baglanti kapandi: ${e.message}")
+        } finally {
+            synchronized(sessions) { sessions.remove(session) }
+            if (session.closeAll()) events.mirrorStopped()
         }
     }
 
+    private fun shortUri(uri: String): String =
+        if (uri.startsWith("rtsp://")) "rtsp://…/" + uri.substringAfterLast('/') else uri
+
     private fun respond(
+        s: Session,
         out: OutputStream,
         proto: String,
         method: String,
@@ -113,8 +175,10 @@ class AirPlayServer(
     ) {
         val cseq = headers["cseq"]
         val octet = "application/octet-stream"
+        val plist = "application/x-apple-binary-plist"
+
         if ((method == "GET" || method == "POST") && uri == "/info") {
-            send(out, proto, 200, "OK", infoPlist(), "application/x-apple-binary-plist", cseq)
+            send(out, proto, 200, "OK", infoPlist(), plist, cseq)
             return
         }
         if (method == "POST" && uri == "/fp-setup") {
@@ -125,6 +189,7 @@ class AirPlayServer(
                 else -> null
             }
             if (reply != null) {
+                if (body.size == 164) s.keyMsg = body.copyOf()
                 log("  fp-setup ${body.size} B tamam")
                 send(out, proto, 200, "OK", reply, octet, cseq)
             } else {
@@ -146,6 +211,7 @@ class AirPlayServer(
                 SecureRandom().nextBytes(ephPriv)
                 val ephPub = X25519.publicKey(ephPriv)
                 val secret = X25519.scalarMult(ephPriv, clientCurve)
+                s.ecdhSecret = secret // yayin anahtarinin turetilmesinde kullanilir
                 val signature = Ed25519.sign(airplay.seed, ephPub + clientCurve)
                 val encrypted = AirPlayCrypto.pairVerifyEncrypt(secret, signature)
                 log("  pair-verify 1 tamam")
@@ -157,17 +223,207 @@ class AirPlayServer(
             }
             return
         }
+
+        when (method) {
+            "OPTIONS" -> {
+                send(
+                    out, proto, 200, "OK", ByteArray(0), null, cseq,
+                    mapOf("Public" to "SETUP, RECORD, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER")
+                )
+                return
+            }
+            "SETUP" -> {
+                handleSetup(s, out, proto, cseq, body)
+                return
+            }
+            "RECORD" -> {
+                send(
+                    out, proto, 200, "OK", ByteArray(0), null, cseq,
+                    mapOf("Audio-Latency" to "0", "Audio-Jack-Status" to "connected; type=analog")
+                )
+                return
+            }
+            "FLUSH", "SET_PARAMETER" -> {
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return
+            }
+            "GET_PARAMETER" -> {
+                val text = String(body, Charsets.ISO_8859_1)
+                if (text.startsWith("volume")) {
+                    send(out, proto, 200, "OK", "volume: 0.000000\r\n".toByteArray(), "text/parameters", cseq)
+                } else {
+                    send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                }
+                return
+            }
+            "TEARDOWN" -> {
+                handleTeardown(s, out, proto, cseq, body)
+                return
+            }
+        }
+        if (method == "POST" && (uri == "/feedback" || uri == "/audioMode")) {
+            send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+            return
+        }
+
         val interesting = listOf("upgrade", "content-type", "user-agent", "x-apple-device-id")
             .mapNotNull { k -> headers[k]?.let { "$k=$it" } }
             .joinToString(" ")
         log("  islenmedi: $interesting")
-        // Govde kucukse (ve metin/plist degilse bile) ilk baytlari logla: protokolu anlamak icin.
         if (body.isNotEmpty()) {
             val preview = body.take(48).joinToString("") { "%02x".format(it) }
             log("  govde: $preview${if (body.size > 48) "..." else ""}")
         }
         send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
     }
+
+    // ---- SETUP / TEARDOWN ----------------------------------------------------------------
+
+    private fun handleSetup(s: Session, out: OutputStream, proto: String, cseq: String?, body: ByteArray) {
+        val plistType = "application/x-apple-binary-plist"
+        val root = try {
+            PropertyListParser.parse(body) as? NSDictionary
+        } catch (e: Exception) {
+            null
+        }
+        if (root == null) {
+            log("  SETUP: plist okunamadı")
+            send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
+            return
+        }
+        val resp = NSDictionary()
+
+        val ekey = (root.objectForKey("ekey") as? NSData)?.bytes()
+        val eiv = (root.objectForKey("eiv") as? NSData)?.bytes()
+        if (ekey != null && eiv != null) {
+            // 1. SETUP: anahtar ve zamanlama.
+            val keyMsg = s.keyMsg
+            if (ekey.size != 72 || eiv.size != 16 || keyMsg == null) {
+                log("  SETUP 1 reddedildi (ekey=${ekey.size} eiv=${eiv.size} keymsg=${keyMsg?.size})")
+                send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
+                return
+            }
+            if (!Playfair.load()) {
+                log("  playfair yüklenemedi")
+                send(out, proto, 500, "Internal Server Error", ByteArray(0), null, cseq)
+                return
+            }
+            val decrypted = Playfair.decrypt(keyMsg, ekey)
+            if (decrypted == null || decrypted.size != 16) {
+                log("  FairPlay anahtarı çözülemedi")
+                send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
+                return
+            }
+            // Eslesme yapildiysa anahtar, pair-verify ortak sirriyla SHA-512'den gecirilir.
+            val secret = s.ecdhSecret
+            val aes = if (secret != null) {
+                MessageDigest.getInstance("SHA-512").digest(decrypted + secret).copyOf(16)
+            } else {
+                decrypted
+            }
+            s.aesKey = aes
+            log("  SETUP 1: yayın anahtarı hazır")
+
+            val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
+            s.ntp?.stop()
+            val localTiming: Int
+            if (timingPort > 0) {
+                val ntp = NtpClient(s.socket.inetAddress, timingPort) { m -> log(m) }
+                ntp.start()
+                s.ntp = ntp
+                localTiming = ntp.localPort
+            } else {
+                val ds = DatagramSocket()
+                s.udp.add(ds)
+                localTiming = ds.localPort
+            }
+            resp.put("timingPort", NSNumber(localTiming))
+            resp.put("eventPort", NSNumber(0))
+        }
+
+        val streams = root.objectForKey("streams") as? NSArray
+        if (streams != null) {
+            val respStreams = ArrayList<NSObject>()
+            for (item in streams.array) {
+                val d = item as? NSDictionary ?: continue
+                when (val type = (d.objectForKey("type") as? NSNumber)?.intValue() ?: -1) {
+                    110 -> {
+                        val aes = s.aesKey
+                        if (aes == null) {
+                            log("  SETUP 110: yayın anahtarı yok")
+                            send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
+                            return
+                        }
+                        val id = (d.objectForKey("streamConnectionID") as? NSNumber)?.longValue() ?: 0L
+                        s.stopMirror()
+                        val decoder = MirrorDecoder(
+                            { events.mirrorSurface() },
+                            { w, h -> events.mirrorSize(w, h) },
+                            { m -> log(m) }
+                        )
+                        val receiver = MirrorReceiver(aes, id, decoder, { m -> log(m) }) {
+                            events.mirrorStopped()
+                        }
+                        receiver.start()
+                        s.mirror = receiver
+                        events.mirrorStarted()
+                        log("  SETUP 110: yansıtma portu ${receiver.port}")
+                        val rd = NSDictionary()
+                        rd.put("dataPort", NSNumber(receiver.port))
+                        rd.put("type", NSNumber(110))
+                        respStreams.add(rd)
+                    }
+                    96 -> {
+                        // Ses henuz desteklenmiyor: portlari ac, gelen veriyi yok say.
+                        val data = DatagramSocket()
+                        val control = DatagramSocket()
+                        s.udp.add(data)
+                        s.udp.add(control)
+                        log("  SETUP 96: ses akışı yok sayılıyor")
+                        val rd = NSDictionary()
+                        rd.put("dataPort", NSNumber(data.localPort))
+                        rd.put("controlPort", NSNumber(control.localPort))
+                        rd.put("type", NSNumber(96))
+                        respStreams.add(rd)
+                    }
+                    else -> log("  SETUP: bilinmeyen akış türü $type")
+                }
+            }
+            resp.put("streams", NSArray(*respStreams.toTypedArray()))
+        }
+
+        send(out, proto, 200, "OK", BinaryPropertyListWriter.writeToArray(resp), plistType, cseq)
+    }
+
+    private fun handleTeardown(s: Session, out: OutputStream, proto: String, cseq: String?, body: ByteArray) {
+        var has96 = false
+        var has110 = false
+        if (body.isNotEmpty()) {
+            try {
+                val root = PropertyListParser.parse(body) as? NSDictionary
+                val arr = root?.objectForKey("streams") as? NSArray
+                if (arr != null) {
+                    for (item in arr.array) {
+                        when ((item as? NSDictionary)?.objectForKey("type").let { (it as? NSNumber)?.intValue() }) {
+                            96 -> has96 = true
+                            110 -> has110 = true
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                log("  TEARDOWN plist okunamadı: ${e.message}")
+            }
+        }
+        log("  TEARDOWN 96=$has96 110=$has110")
+        send(out, proto, 200, "OK", ByteArray(0), null, cseq, mapOf("Connection" to "close"))
+        when {
+            has96 -> s.closeUdp()
+            has110 -> if (s.stopMirror()) events.mirrorStopped()
+            else -> if (s.closeAll()) events.mirrorStopped()
+        }
+    }
+
+    // ---- yardimcilar ---------------------------------------------------------------------
 
     private fun send(
         out: OutputStream,
@@ -176,17 +432,21 @@ class AirPlayServer(
         text: String,
         body: ByteArray,
         contentType: String?,
-        cseq: String?
+        cseq: String?,
+        extra: Map<String, String> = emptyMap()
     ) {
         val sb = StringBuilder()
         sb.append("$proto $code $text\r\n")
         sb.append("Server: AirTunes/220.68\r\n")
         if (cseq != null) sb.append("CSeq: $cseq\r\n")
+        for ((k, v) in extra) sb.append("$k: $v\r\n")
         if (contentType != null) sb.append("Content-Type: $contentType\r\n")
         sb.append("Content-Length: ${body.size}\r\n\r\n")
-        out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
-        out.write(body)
-        out.flush()
+        synchronized(out) {
+            out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
+            out.write(body)
+            out.flush()
+        }
     }
 
     private fun infoPlist(): ByteArray {
@@ -203,6 +463,22 @@ class AirPlayServer(
         d.put("statusFlags", NSNumber(4))
         d.put("keepAliveLowPower", NSNumber(true))
         d.put("keepAliveSendStatsAsBody", NSNumber(true))
+
+        // Ekran yansitma icin ekran bilgisi (UxPlay ile ayni anahtarlar).
+        val display = NSDictionary()
+        display.put("uuid", NSString("e0ff8a27-6738-3d56-8a16-cc53aacee925"))
+        display.put("widthPhysical", NSNumber(0))
+        display.put("heightPhysical", NSNumber(0))
+        display.put("width", NSNumber(1920))
+        display.put("height", NSNumber(1080))
+        display.put("widthPixels", NSNumber(1920))
+        display.put("heightPixels", NSNumber(1080))
+        display.put("rotation", NSNumber(false))
+        display.put("refreshRate", NSNumber(1.0 / 60.0))
+        display.put("maxFPS", NSNumber(30))
+        display.put("overscanned", NSNumber(false))
+        display.put("features", NSNumber(14))
+        d.put("displays", NSArray(display))
         return BinaryPropertyListWriter.writeToArray(d)
     }
 

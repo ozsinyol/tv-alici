@@ -17,3 +17,16 @@ TV uygulaması açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfa
 - Ya da APK'yı USB belleğe koyup TV'deki bir dosya yöneticisiyle kurun.
 
 iPhone ve TV aynı Wi-Fi ağında olmalı.
+
+## Ekran yansıtma (AirPlay) ve lisans
+
+TV, ağda "TV Alici" adıyla bir AirPlay alıcısı olarak görünür; iPhone'un Denetim Merkezi'nden **Ekran Yansıtma** ile bağlanılır. Şu an yalnızca görüntü desteklenir (ses yok sayılır).
+
+Bu özellik, FairPlay yayın anahtarını çözmek için [UxPlay](https://github.com/FDH2/UxPlay) projesindeki `playfair` kodunu (`app/src/main/cpp/playfair`, GNU GPL v3) ve aynı projenin `fairplay_playfair.c` dosyasındaki yanıt tablolarını (LGPL 2.1+, `AirPlayFairPlay.kt`) kullanır. Bu nedenle **bu depo GNU GPL v3 ile lisanslıdır** (bkz. `LICENSE`).
+
+AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proje kişisel/deneysel kullanım içindir.
+
+## Hata ayıklama
+
+- TV ekranında son satırlar görünür.
+- iPhone'dan `http://<tv-ip>:8080/log?pin=<PIN>` adresi tüm günlüğü gösterir.
