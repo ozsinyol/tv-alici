@@ -169,7 +169,7 @@ class MirrorDecoder(
     private fun feedNow(data: ByteArray, len: Int) {
         val c = codec ?: return
         try {
-            val idx = c.dequeueInputBuffer(20_000)
+            val idx = c.dequeueInputBuffer(40_000)
             if (idx < 0) {
                 dropped++
                 if (dropped % 30 == 1) log("Kare atlandı (toplam $dropped)")

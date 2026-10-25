@@ -792,7 +792,7 @@ class AirPlayServer(
         display.put("heightPixels", NSNumber(1080))
         display.put("rotation", NSNumber(false))
         display.put("refreshRate", NSNumber(1.0 / 60.0))
-        display.put("maxFPS", NSNumber(30))
+        display.put("maxFPS", NSNumber(60))
         display.put("overscanned", NSNumber(false))
         display.put("features", NSNumber(14))
         d.put("displays", NSArray(display))
