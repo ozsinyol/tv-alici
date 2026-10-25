@@ -29,6 +29,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
@@ -122,7 +123,11 @@ class MainActivity : AppCompatActivity(), VideoEvents {
             .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
 
         val playerView = PlayerView(this)
-        player = ExoPlayer.Builder(this).build().also { p ->
+        // Video AirPlay (/play): varsayilan 2,5 sn / 5 sn yerine daha erken baslat ve takilma sonrasi daha cabuk devam et.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_500)
+            .build()
+        player = ExoPlayer.Builder(this).setLoadControl(loadControl).build().also { p ->
             playerView.player = p
             p.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {

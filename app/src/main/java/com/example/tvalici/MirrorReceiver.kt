@@ -2,6 +2,7 @@ package com.example.tvalici
 
 import java.io.BufferedInputStream
 import java.io.DataInputStream
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -28,7 +29,12 @@ class MirrorReceiver(
     private val log: (String) -> Unit,
     private val onEnded: () -> Unit
 ) {
-    private val serverSocket = ServerSocket(0)
+    // Alma tamponu bind'den ONCE ayarlanmali ki kabul edilen soket de miras alsin (Wi-Fi dalgalanmasinda
+    // TCP penceresi kucuk kalmasin, kareler toplu halde gelip gecikme yaratmasin).
+    private val serverSocket = ServerSocket().apply {
+        receiveBufferSize = 1 shl 20
+        bind(InetSocketAddress(0))
+    }
     val port: Int get() = serverSocket.localPort
 
     @Volatile
@@ -52,6 +58,7 @@ class MirrorReceiver(
 
     fun start() {
         thread(name = "mirror-recv", isDaemon = true) {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
             try {
                 val s = serverSocket.accept()
                 client = s
@@ -106,14 +113,15 @@ class MirrorReceiver(
             when (type) {
                 0 -> {
                     // Sifreyi her zaman coz: anahtar akisi paket atlansa bile hizali kalmali.
-                    val out = ByteArray(size)
-                    val n = cipher.update(payload, 0, size, out, 0)
+                    // Yerinde (ayni dizi) cozulur: kare basina ikinci bir dizi ayirma + kopyalama yok.
+                    val n = cipher.update(payload, 0, size, payload, 0)
                     if (n != size) {
                         log("Şifre çözme boyutu uyuşmuyor ($n != $size)")
                         return
                     }
-                    if (toAnnexB(out, size)) {
-                        decoder.feed(out, size)
+                    val kind = toAnnexB(payload, size)
+                    if (kind != FRAME_INVALID) {
+                        decoder.feed(payload, size, kind == FRAME_IDR)
                         frames++
                         if (frames == 1) log("İlk kare çözücüye verildi")
                         if (frames % 300 == 0) log("Kare sayısı: $frames")
@@ -127,22 +135,28 @@ class MirrorReceiver(
         }
     }
 
-    /** AVCC (4 bayt uzunluk) -> Annex-B (00 00 00 01). Gecerli degilse false. */
-    private fun toAnnexB(data: ByteArray, size: Int): Boolean {
+    /**
+     * AVCC (4 bayt uzunluk) -> Annex-B (00 00 00 01), yerinde.
+     * Donus: FRAME_INVALID, FRAME_DELTA (P kare) ya da FRAME_IDR (anahtar kare, NAL turu 5 iceriyor).
+     */
+    private fun toAnnexB(data: ByteArray, size: Int): Int {
         var pos = 0
+        var idr = false
         while (pos + 4 <= size) {
             val len = ((data[pos].toInt() and 0xff) shl 24) or
                 ((data[pos + 1].toInt() and 0xff) shl 16) or
                 ((data[pos + 2].toInt() and 0xff) shl 8) or
                 (data[pos + 3].toInt() and 0xff)
-            if (len < 0 || len > size - pos - 4) return false
+            if (len < 0 || len > size - pos - 4) return FRAME_INVALID
+            if (len > 0 && (data[pos + 4].toInt() and 0x1f) == 5) idr = true
             data[pos] = 0
             data[pos + 1] = 0
             data[pos + 2] = 0
             data[pos + 3] = 1
             pos += 4 + len
         }
-        return pos == size && size > 0
+        if (pos != size || size <= 0) return FRAME_INVALID
+        return if (idr) FRAME_IDR else FRAME_DELTA
     }
 
     private fun handleCodecPacket(header: ByteArray, p: ByteArray) {
@@ -176,4 +190,10 @@ class MirrorReceiver(
 
     private fun sha512(data: ByteArray): ByteArray =
         MessageDigest.getInstance("SHA-512").digest(data)
+
+    private companion object {
+        const val FRAME_INVALID = 0
+        const val FRAME_DELTA = 1
+        const val FRAME_IDR = 2
+    }
 }

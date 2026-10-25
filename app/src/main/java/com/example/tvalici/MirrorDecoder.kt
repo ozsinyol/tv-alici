@@ -28,8 +28,14 @@ class MirrorDecoder(
     @Volatile
     private var released = false
 
+    // Birikme sonrasi bir sonraki anahtar kareye (IDR) kadar P kareler atilir (bozuk goruntu yerine kisa donma).
+    @Volatile
+    private var waitKey = false
+    private var skipped = 0
+
     init {
         thread(name = "mirror-sched", isDaemon = true) {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
             while (!released) {
                 val f = (try {
                     queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -66,13 +72,17 @@ class MirrorDecoder(
             format.setByteBuffer("csd-1", ByteBuffer.wrap(startCode + pps))
             format.setInteger("low-latency", 1) // eski surumlerde yok sayilir
             format.setInteger(MediaFormat.KEY_PRIORITY, 0) // gercek zamanli
+            // Cozucuyu tam hizda calistir (gercek zamanli onerisi); dusuk guc/hiz modunda kalmasin.
+            format.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
             val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            applyVendorLowLatency(format, c.name)
             c.configure(format, surface, null, 0)
             c.start()
             codec = c
             currentSps = sps
             currentPps = pps
             ptsUs = 0L
+            waitKey = false
             log("Çözücü hazır ${width}x$height")
             startDrain(c)
         } catch (e: Exception) {
@@ -83,13 +93,24 @@ class MirrorDecoder(
 
     private fun startDrain(c: MediaCodec) {
         thread(name = "mirror-drain", isDaemon = true) {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
             val info = MediaCodec.BufferInfo()
+            // Cozucu geride kalip iki kare birden hazirsa eskisi cizilmez, yalnizca en yenisi cizilir:
+            // goruntu geri kalan kareleri tek tek oynatarak gecikmeyi korumak yerine yetisir.
+            var pending = -1
             while (codec === c) {
                 try {
-                    val i = c.dequeueOutputBuffer(info, 10_000)
+                    val i = c.dequeueOutputBuffer(info, if (pending >= 0) 0L else 10_000L)
                     when {
-                        i >= 0 -> c.releaseOutputBuffer(i, true) // hemen ciz
+                        i >= 0 -> {
+                            if (pending >= 0) c.releaseOutputBuffer(pending, false)
+                            pending = i
+                        }
                         i == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> reportSize(c.outputFormat)
+                        i == MediaCodec.INFO_TRY_AGAIN_LATER -> if (pending >= 0) {
+                            c.releaseOutputBuffer(pending, true) // hemen ciz
+                            pending = -1
+                        }
                     }
                 } catch (e: Exception) {
                     break // codec kapatildi
@@ -114,10 +135,33 @@ class MirrorDecoder(
         }
     }
 
-    /** Annex-B bicimindeki bir kareyi sira ile (gecikme ayarina gore) cozucuye iletir. */
-    fun feed(data: ByteArray, len: Int) {
+    /**
+     * Annex-B bicimindeki bir kareyi sira ile (gecikme ayarina gore) cozucuye iletir.
+     * [idr]: kare anahtar kare mi. Birikme olursa gecikme buyumesin diye eski kareler atilir:
+     *  - anahtar kare geldiginde (ayar gecikmesi yokken) onundeki bekleyen kareler gereksizdir, referans bozulmaz;
+     *  - birikme sinirini asarsa kuyruk bosaltilir ve sonraki anahtar kareye kadar P kareler beklenmez.
+     */
+    fun feed(data: ByteArray, len: Int, idr: Boolean) {
         if (released) return
-        if (queue.size > 200) queue.clear() // zamanlayici takildiysa birikmesin
+        if (waitKey) {
+            if (!idr) return
+            waitKey = false
+        }
+        val backlog = queue.size
+        val cap = MAX_BACKLOG + SyncSettings.videoDelayMs / 10
+        if (idr) {
+            if ((SyncSettings.videoDelayMs == 0 && backlog >= 2) || backlog > cap) {
+                queue.clear()
+                skipped += backlog
+                log("Birikme giderildi: $backlog kare atlandı (toplam $skipped)")
+            }
+        } else if (backlog > cap) {
+            queue.clear()
+            skipped += backlog
+            waitKey = true
+            log("Çözücü yetişemedi: $backlog kare atıldı, anahtar kare bekleniyor")
+            return
+        }
         queue.add(Frame(data, len, System.nanoTime()))
     }
 
@@ -168,5 +212,28 @@ class MirrorDecoder(
         } catch (e: Exception) {
             // onemsiz
         }
+    }
+
+    /** Cozucunun adina gore uretici ozel dusuk gecikme anahtarlarini ekler (eslesmeyen marka dokunulmaz). */
+    private fun applyVendorLowLatency(format: MediaFormat, codecName: String) {
+        val n = codecName.lowercase()
+        when {
+            n.contains("qcom") || n.contains("qti") ->
+                format.setInteger("vendor.qti-ext-dec-low-latency.enable", 1)
+            n.contains("exynos") ->
+                format.setInteger("vendor.rtc-ext-dec-low-latency.enable", 1)
+            n.contains("amlogic") ->
+                format.setInteger("vendor.low-latency.enable", 1)
+            n.contains("hisi") -> {
+                format.setInteger("vendor.hisi-ext-low-latency-video-dec.video-scene-for-low-latency-req", 1)
+                format.setInteger("vendor.hisi-ext-low-latency-video-dec.video-scene-for-low-latency-rdy", -1)
+            }
+        }
+        log("Çözücü: $codecName")
+    }
+
+    private companion object {
+        /** Bu kadar kareden fazla birikirse (60 fps'te ~0,5 sn) kuyruk bosaltilir. */
+        const val MAX_BACKLOG = 30
     }
 }
