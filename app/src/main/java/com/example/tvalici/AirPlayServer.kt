@@ -59,6 +59,7 @@ class AirPlayServer(
     private val airplay: AirPlayInfo,
     private val events: MirrorEvents,
     private val video: VideoEvents,
+    private val gate: ApprovalGate,
     private val onLog: (String) -> Unit
 ) {
     @Volatile
@@ -84,6 +85,7 @@ class AirPlayServer(
     /** Her TCP baglantisinin kendi eslesme ve yayin durumu vardir. */
     private class Session(val socket: Socket) {
         var out: OutputStream? = null
+        var authorized = false // TV'de izin verilen IP'den gelen baglanti
         var keyMsg: ByteArray? = null // /fp-setup 2. asama mesaji (164 B)
         var ecdhSecret: ByteArray? = null // pair-verify X25519 ortak sirri
         var aesKey: ByteArray? = null
@@ -258,6 +260,18 @@ class AirPlayServer(
         val cseq = headers["cseq"]
         val octet = "application/octet-stream"
         val plist = "application/x-apple-binary-plist"
+
+        // /info herkese acik (cihaz listede gorunsun); gerisi icin TV'de izin gerekir.
+        val open = uri == "/info" || uri == "/feedback"
+        if (!open && !s.authorized) {
+            if (gate.check(s.socket.inetAddress.hostAddress ?: "")) {
+                s.authorized = true
+            } else {
+                log("  izin verilmedi")
+                send(out, proto, 403, "Forbidden", ByteArray(0), null, cseq)
+                return
+            }
+        }
 
         if ((method == "GET" || method == "POST") && uri == "/info") {
             send(out, proto, 200, "OK", infoPlist(), plist, cseq)

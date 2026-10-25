@@ -44,8 +44,6 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     private var player: ExoPlayer? = null
     private var server: VideoServer? = null
     private lateinit var overlayView: LinearLayout
-    private lateinit var logView: TextView
-    private val logLines = mutableListOf<String>()
 
     private var airplayServer: AirPlayServer? = null
     private var airplayAdvertiser: AirPlayAdvertiser? = null
@@ -154,19 +152,12 @@ class MainActivity : AppCompatActivity(), VideoEvents {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
-        logView = TextView(this).apply {
-            textSize = 12f
-            setTextColor(Color.GRAY)
-            gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 0)
-        }
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
             addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            addView(logView, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
         mirrorView = SurfaceView(this).apply {
@@ -209,7 +200,12 @@ class MainActivity : AppCompatActivity(), VideoEvents {
 
         try {
             val airplayInfo = AirPlayInfo.load(this, "TV Alici")
-            airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents, this) { msg -> appendLog(msg) }
+            val approvals = Approvals(
+                getSharedPreferences("airplay", Context.MODE_PRIVATE),
+                { ip, answer -> askApproval(ip, answer) },
+                { msg -> appendLog(msg) }
+            )
+            airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents, this, approvals) { msg -> appendLog(msg) }
                 .also { it.start() }
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
                 .also { it.start() }
@@ -317,15 +313,26 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         mirrorView.layoutParams = lp
     }
 
-    /** Gecici hata ayiklama: son satirlari QR ekraninin altinda gosterir. */
+    /** Gunluk yalnizca bellekte tutulur; /log sayfasindan okunur, TV ekraninda gosterilmez. */
     private fun appendLog(msg: String) {
         Log.i("AirPlay", msg)
         LogBuffer.add(msg)
+    }
+
+    /** Bilinmeyen bir cihaz baglanmak isteyince TV'de izin penceresi acar. */
+    private fun askApproval(ip: String, answer: (Approvals.Result) -> Unit): () -> Unit {
+        var dialog: androidx.appcompat.app.AlertDialog? = null
         runOnUiThread {
-            logLines.add(msg)
-            while (logLines.size > 8) logLines.removeAt(0)
-            logView.text = logLines.joinToString("\n")
+            dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Bağlantı isteği")
+                .setMessage("$ip adresindeki cihaz TV'ye bağlanmak istiyor.")
+                .setPositiveButton("İzin ver") { _, _ -> answer(Approvals.Result.ONCE) }
+                .setNeutralButton("Hep izin ver") { _, _ -> answer(Approvals.Result.ALWAYS) }
+                .setNegativeButton("Reddet") { _, _ -> answer(Approvals.Result.DENY) }
+                .setOnCancelListener { answer(Approvals.Result.DENY) }
+                .show()
         }
+        return { runOnUiThread { dialog?.dismiss() } }
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
