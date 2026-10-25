@@ -12,6 +12,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.SecureRandom
 import kotlin.concurrent.thread
 
 /**
@@ -94,7 +95,7 @@ class AirPlayServer(
                     }
 
                     log("$method $uri ($length B)")
-                    respond(out, proto, method, uri, headers)
+                    respond(out, proto, method, uri, headers, body)
                 }
             }
         } catch (e: Exception) {
@@ -107,11 +108,37 @@ class AirPlayServer(
         proto: String,
         method: String,
         uri: String,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        body: ByteArray
     ) {
         val cseq = headers["cseq"]
+        val octet = "application/octet-stream"
         if ((method == "GET" || method == "POST") && uri == "/info") {
             send(out, proto, 200, "OK", infoPlist(), "application/x-apple-binary-plist", cseq)
+            return
+        }
+        if (method == "POST" && uri == "/pair-setup") {
+            // Istemci 32 bayt Ed25519 acik anahtarini yollar, biz kendimizinkini doneriz.
+            send(out, proto, 200, "OK", airplay.publicKey, octet, cseq)
+            return
+        }
+        if (method == "POST" && uri == "/pair-verify" && body.size >= 4) {
+            if (body[0].toInt() == 1 && body.size == 68) {
+                // Adim 1: istemcinin gecici Curve25519 anahtari (+ Ed25519 anahtari) gelir.
+                val clientCurve = body.copyOfRange(4, 36)
+                val ephPriv = ByteArray(32)
+                SecureRandom().nextBytes(ephPriv)
+                val ephPub = X25519.publicKey(ephPriv)
+                val secret = X25519.scalarMult(ephPriv, clientCurve)
+                val signature = Ed25519.sign(airplay.seed, ephPub + clientCurve)
+                val encrypted = AirPlayCrypto.pairVerifyEncrypt(secret, signature)
+                log("  pair-verify 1 tamam")
+                send(out, proto, 200, "OK", ephPub + encrypted, octet, cseq)
+            } else {
+                // Adim 2: istemcinin imzasi. Ev agi prototipi, dogrulamayi atliyoruz.
+                log("  pair-verify 2 tamam")
+                send(out, proto, 200, "OK", ByteArray(0), octet, cseq)
+            }
             return
         }
         val interesting = listOf("upgrade", "content-type", "user-agent", "x-apple-device-id")

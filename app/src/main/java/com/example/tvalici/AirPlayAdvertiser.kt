@@ -9,8 +9,9 @@ import java.security.SecureRandom
 class AirPlayInfo(
     val name: String,
     val deviceId: String,
-    val publicKey: ByteArray
+    val seed: ByteArray
 ) {
+    val publicKey: ByteArray = Ed25519.publicKey(seed)
     val model = "AppleTV3,2"
     val srcvers = "220.68"
     val pi = "2e388006-13ba-4041-9a67-25dd4a43d536"
@@ -23,20 +24,21 @@ class AirPlayInfo(
         fun load(context: Context, name: String): AirPlayInfo {
             val prefs = context.getSharedPreferences("airplay", Context.MODE_PRIVATE)
             val savedId = prefs.getString("deviceId", null)
-            val savedPk = prefs.getString("pk", null)
-            if (savedId != null && savedPk != null) {
-                return AirPlayInfo(name, savedId, hexToBytes(savedPk))
+            val savedSeed = prefs.getString("seed", null)
+            if (savedId != null && savedSeed != null) {
+                return AirPlayInfo(name, savedId, hexToBytes(savedSeed))
             }
+            // Ilk calistirma (ya da eski yer tutucu anahtardan gecis): yeni kimlik uret.
             val random = SecureRandom()
             val mac = ByteArray(6)
             random.nextBytes(mac)
             mac[0] = ((mac[0].toInt() and 0xFE) or 0x02).toByte() // yerel, tekil adres
             val id = mac.joinToString(":") { "%02X".format(it) }
-            val key = ByteArray(32)
-            random.nextBytes(key)
-            val keyHex = key.joinToString("") { "%02x".format(it) }
-            prefs.edit().putString("deviceId", id).putString("pk", keyHex).apply()
-            return AirPlayInfo(name, id, key)
+            val seed = ByteArray(32)
+            random.nextBytes(seed)
+            val seedHex = seed.joinToString("") { "%02x".format(it) }
+            prefs.edit().putString("deviceId", id).putString("seed", seedHex).apply()
+            return AirPlayInfo(name, id, seed)
         }
 
         private fun hexToBytes(hex: String): ByteArray =

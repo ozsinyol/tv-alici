@@ -30,4 +30,5 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.googlecode.plist:dd-plist:1.28")
+    implementation("net.i2p.crypto:eddsa:0.3.0")
 }
