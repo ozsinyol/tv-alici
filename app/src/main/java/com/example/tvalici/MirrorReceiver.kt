@@ -95,6 +95,12 @@ class MirrorReceiver(
         val header = ByteArray(128)
         var frames = 0
         var packets = 0
+        // Olcum: ardisik kareler arasindaki varis suresi (ag titremesi).
+        var lastArrivalNs = 0L
+        var gapSumNs = 0L
+        var gapMaxNs = 0L
+        var gapCount = 0
+        var gapOver50 = 0
         while (running) {
             input.readFully(header)
             val hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
@@ -121,10 +127,26 @@ class MirrorReceiver(
                     }
                     val kind = toAnnexB(payload, size)
                     if (kind != FRAME_INVALID) {
+                        val now = System.nanoTime()
+                        if (lastArrivalNs != 0L) {
+                            val gap = now - lastArrivalNs
+                            gapSumNs += gap
+                            if (gap > gapMaxNs) gapMaxNs = gap
+                            if (gap > 50_000_000L) gapOver50++
+                            gapCount++
+                        }
+                        lastArrivalNs = now
                         decoder.feed(payload, size, kind == FRAME_IDR)
                         frames++
                         if (frames == 1) log("İlk kare çözücüye verildi")
-                        if (frames % 300 == 0) log("Kare sayısı: $frames")
+                        if (frames % 300 == 0) {
+                            val avg = if (gapCount > 0) gapSumNs / gapCount / 1000 else 0L
+                            log(
+                                "Kare sayısı: $frames | varış aralığı ort ${avg / 1000}.${(avg % 1000) / 100} ms, " +
+                                    "en büyük ${gapMaxNs / 1_000_000} ms, 50 ms üstü: $gapOver50"
+                            )
+                            gapSumNs = 0L; gapMaxNs = 0L; gapCount = 0; gapOver50 = 0
+                        }
                     } else if (frames < 3) {
                         log("Kare biçimi geçersiz (anahtar yanlış olabilir)")
                     }

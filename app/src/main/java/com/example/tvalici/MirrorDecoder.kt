@@ -18,6 +18,9 @@ class MirrorDecoder(
     private var ptsUs = 0L
     private var dropped = 0
 
+    // Olcum: kare cozucuye girdigi an (pts sirasina gore) saklanir, cikista gecikme hesaplanir.
+    private val inputNs = LongArray(256)
+
     private val startCode = byteArrayOf(0, 0, 0, 1)
 
     // Ses/goruntu ayari: kareler geldikleri andan itibaren SyncSettings.videoDelayMs kadar bekletilir.
@@ -47,7 +50,7 @@ class MirrorDecoder(
                     if (remaining <= 0) break
                     java.util.concurrent.locks.LockSupport.parkNanos(minOf(remaining, 10_000_000L))
                 }
-                if (!released) feedNow(f.data, f.len)
+                if (!released) feedNow(f.data, f.len, f.arrivedNs)
             }
         }
     }
@@ -98,13 +101,35 @@ class MirrorDecoder(
             // Cozucu geride kalip iki kare birden hazirsa eskisi cizilmez, yalnizca en yenisi cizilir:
             // goruntu geri kalan kareleri tek tek oynatarak gecikmeyi korumak yerine yetisir.
             var pending = -1
+            var latSumNs = 0L
+            var latMaxNs = 0L
+            var outCount = 0
+            var outSkipped = 0
             while (codec === c) {
                 try {
                     val i = c.dequeueOutputBuffer(info, if (pending >= 0) 0L else 10_000L)
                     when {
                         i >= 0 -> {
-                            if (pending >= 0) c.releaseOutputBuffer(pending, false)
+                            if (pending >= 0) {
+                                c.releaseOutputBuffer(pending, false)
+                                outSkipped++
+                            }
                             pending = i
+                            val arrived = inputNs[((info.presentationTimeUs / 16_667L) % 256).toInt()]
+                            if (arrived != 0L) {
+                                val lat = System.nanoTime() - arrived
+                                latSumNs += lat
+                                if (lat > latMaxNs) latMaxNs = lat
+                            }
+                            outCount++
+                            if (outCount % 300 == 0) {
+                                log(
+                                    "Çözücü gecikmesi: ort ${latSumNs / 300 / 1_000_000} ms, " +
+                                        "en çok ${latMaxNs / 1_000_000} ms | çıkışta atlanan: $outSkipped, " +
+                                        "girişte atlanan (toplam): $dropped"
+                                )
+                                latSumNs = 0L; latMaxNs = 0L; outSkipped = 0
+                            }
                         }
                         i == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> reportSize(c.outputFormat)
                         i == MediaCodec.INFO_TRY_AGAIN_LATER -> if (pending >= 0) {
@@ -166,7 +191,7 @@ class MirrorDecoder(
     }
 
     @Synchronized
-    private fun feedNow(data: ByteArray, len: Int) {
+    private fun feedNow(data: ByteArray, len: Int, arrivedNs: Long) {
         val c = codec ?: return
         try {
             val idx = c.dequeueInputBuffer(40_000)
@@ -184,6 +209,7 @@ class MirrorDecoder(
             }
             buf.put(data, 0, len)
             ptsUs += 16_667L
+            inputNs[((ptsUs / 16_667L) % 256).toInt()] = arrivedNs
             c.queueInputBuffer(idx, 0, len, ptsUs, 0)
         } catch (e: Exception) {
             log("Çözücü hatası: ${e.javaClass.simpleName} ${e.message}")
