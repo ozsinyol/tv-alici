@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Workflow, VERSION_CODE ortam degiskenine run numarasini verir; yerelde 1 kalir.
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+
 android {
     namespace = "com.example.tvalici"
     compileSdk = 34
@@ -12,8 +15,22 @@ android {
         applicationId = "com.example.tvalici"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = appVersionCode
+        versionName = "0.$appVersionCode"
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    // Her derleme ayni anahtarla imzalanir; yoksa guncelleme "uygulama yuklenemedi" der.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     compileOptions {

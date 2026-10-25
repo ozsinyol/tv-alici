@@ -80,6 +80,9 @@ class MainActivity : AppCompatActivity() {
             .also { it.start() }
         airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
             .also { it.start() }
+
+        appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
+        Updater(this).check()
     }
 
     /** Gecici hata ayiklama: son satirlari QR ekraninin altinda gosterir. */
