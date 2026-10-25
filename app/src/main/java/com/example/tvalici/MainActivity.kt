@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private var player: ExoPlayer? = null
     private var server: VideoServer? = null
-    private lateinit var overlay: LinearLayout
+    private lateinit var overlayView: LinearLayout
 
     private val port = 8080
 
@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
-        overlay = LinearLayout(this).apply {
+        overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(FrameLayout(this).apply {
             addView(playerView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            addView(overlay, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         })
 
         server = VideoServer(port, cacheDir) { file -> runOnUiThread { play(file) } }
@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun play(file: File) {
-        overlay.visibility = android.view.View.GONE
+        overlayView.visibility = android.view.View.GONE
         player?.apply {
             setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
             prepare()
@@ -74,9 +74,9 @@ class MainActivity : AppCompatActivity() {
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (overlay.visibility == android.view.View.GONE) {
+        if (overlayView.visibility == android.view.View.GONE) {
             player?.stop()
-            overlay.visibility = android.view.View.VISIBLE
+            overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()
         }
