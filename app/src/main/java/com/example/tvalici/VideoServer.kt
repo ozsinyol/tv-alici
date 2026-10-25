@@ -20,6 +20,10 @@ class VideoServer(
                 val files = HashMap<String, String>()
                 session.parseBody(files)
                 val tmpPath = files["video"] ?: return text("Dosya gelmedi", Response.Status.BAD_REQUEST)
+                // Onceki yuklemeleri temizle (onbellek dolmasin).
+                dir.listFiles()?.forEach { f ->
+                    if (f.name.startsWith("video_")) f.delete()
+                }
                 val dest = File(dir, "video_${System.currentTimeMillis()}")
                 File(tmpPath).copyTo(dest, overwrite = true)
                 onVideo(dest)

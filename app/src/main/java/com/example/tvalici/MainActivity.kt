@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
+import android.view.WindowManager
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
@@ -38,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val playerView = PlayerView(this)
         player = ExoPlayer.Builder(this).build().also { playerView.player = it }
@@ -72,14 +74,22 @@ class MainActivity : AppCompatActivity() {
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         })
 
-        server = VideoServer(port, cacheDir) { file -> runOnUiThread { play(file) } }
-            .also { it.start() }
+        try {
+            server = VideoServer(port, cacheDir) { file -> runOnUiThread { play(file) } }
+                .also { it.start() }
+        } catch (e: Exception) {
+            appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
+        }
 
-        val airplayInfo = AirPlayInfo.load(this, "TV Alici")
-        airplayServer = AirPlayServer(airplayPort, airplayInfo) { msg -> appendLog(msg) }
-            .also { it.start() }
-        airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
-            .also { it.start() }
+        try {
+            val airplayInfo = AirPlayInfo.load(this, "TV Alici")
+            airplayServer = AirPlayServer(airplayPort, airplayInfo) { msg -> appendLog(msg) }
+                .also { it.start() }
+            airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
+                .also { it.start() }
+        } catch (e: Exception) {
+            appendLog("AirPlay başlamadı: ${e.message}")
+        }
 
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         Updater(this).check()
