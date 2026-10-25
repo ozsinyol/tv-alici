@@ -29,6 +29,26 @@ interface MirrorEvents {
     fun mirrorStopped()
 }
 
+/** Video AirPlay (/play) olaylari (MainActivity uygular). Hangi is parcacigindan cagrilirsa cagrilsin. */
+interface VideoEvents {
+    /** startSeconds ya da startFraction yoksa -1 gelir. */
+    fun videoPlay(url: String, startSeconds: Double, startFraction: Double)
+    fun videoRate(rate: Float)
+    fun videoSeek(seconds: Double)
+    fun videoStop()
+    fun videoInfo(): VideoInfo
+}
+
+/** /playback-info yaniti icin oynatici anlik durumu. */
+class VideoInfo(
+    val active: Boolean = false,
+    val duration: Double = 0.0,
+    val position: Double = 0.0,
+    val rate: Float = 0f,
+    val ready: Boolean = false,
+    val bufferEmpty: Boolean = false
+)
+
 /**
  * AirPlay sunucusu: /info, eslesme (pair-setup / pair-verify), FairPlay (/fp-setup) ve
  * ekran yansitma icin RTSP istekleri (SETUP, RECORD, TEARDOWN ...). Ayni TCP baglantisinda
@@ -38,6 +58,7 @@ class AirPlayServer(
     private val port: Int,
     private val airplay: AirPlayInfo,
     private val events: MirrorEvents,
+    private val video: VideoEvents,
     private val onLog: (String) -> Unit
 ) {
     @Volatile
@@ -45,8 +66,24 @@ class AirPlayServer(
     private var serverSocket: ServerSocket? = null
     private val sessions = mutableSetOf<Session>()
 
+    /** iPhone'un /reverse ile actigi olay kanali; TV -> iPhone olaylari buradan gider. */
+    @Volatile
+    private var reverse: Session? = null
+
+    @Volatile
+    private var videoSessionId: String? = null
+
+    // Ag yazmalari ana is parcacigindan yapilamaz; olaylar sirayla tek bir is parcaciginda gider.
+    private val eventExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "airplay-event").apply { isDaemon = true }
+    }
+
+    @Volatile
+    private var videoSessionPlist: NSObject? = null
+
     /** Her TCP baglantisinin kendi eslesme ve yayin durumu vardir. */
     private class Session(val socket: Socket) {
+        var out: OutputStream? = null
         var keyMsg: ByteArray? = null // /fp-setup 2. asama mesaji (164 B)
         var ecdhSecret: ByteArray? = null // pair-verify X25519 ortak sirri
         var aesKey: ByteArray? = null
@@ -103,12 +140,43 @@ class AirPlayServer(
 
     fun stop() {
         running = false
+        eventExecutor.shutdownNow()
         try {
             serverSocket?.close()
         } catch (e: Exception) {
             // kapanirken hata onemsiz
         }
         stopAllMirrors()
+    }
+
+    /** TV'de oynatma durumu degisti (loading / playing / paused / stopped): iPhone'a olay yollar. */
+    fun notifyVideoState(state: String) {
+        val r = reverse ?: return
+        val out = r.out ?: return
+        eventExecutor.execute { sendVideoEvent(out, state) }
+    }
+
+    private fun sendVideoEvent(out: OutputStream, state: String) {
+        try {
+            val d = NSDictionary()
+            d.put("category", NSString("video"))
+            d.put("state", NSString(state))
+            videoSessionPlist?.let { d.put("sessionID", it) }
+            val body = BinaryPropertyListWriter.writeToArray(d)
+            val sb = StringBuilder()
+            sb.append("POST /event HTTP/1.1\r\n")
+            sb.append("Content-Type: application/x-apple-binary-plist\r\n")
+            videoSessionId?.let { sb.append("X-Apple-Session-ID: $it\r\n") }
+            sb.append("Content-Length: ${body.size}\r\n\r\n")
+            synchronized(out) {
+                out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
+                out.write(body)
+                out.flush()
+            }
+            log("  olay -> iPhone: $state")
+        } catch (e: Exception) {
+            log("  olay gonderilemedi: ${e.message}")
+        }
     }
 
     /** Geri tusu: acik yansitma baglantilarini kapatir. */
@@ -130,6 +198,7 @@ class AirPlayServer(
             socket.use { s ->
                 val input = BufferedInputStream(s.getInputStream())
                 val out = s.getOutputStream()
+                session.out = out
                 while (true) {
                     val requestLine = readLine(input) ?: break
                     if (requestLine.isBlank()) continue
@@ -157,6 +226,9 @@ class AirPlayServer(
                         read += n
                     }
 
+                    // /reverse sonrasi iPhone, bizim /event isteklerimize yanit verir: yut.
+                    if (method.startsWith("HTTP/")) continue
+
                     // Sik gelen nabiz isteklerini loglama.
                     if (uri != "/feedback") log("$method ${shortUri(uri)} ($length B)")
                     respond(session, out, proto, method, uri, headers, body)
@@ -166,6 +238,7 @@ class AirPlayServer(
             log("Baglanti kapandi: ${e.message}")
         } finally {
             synchronized(sessions) { sessions.remove(session) }
+            if (reverse === session) reverse = null
             if (session.closeAll()) events.mirrorStopped()
         }
     }
@@ -233,6 +306,8 @@ class AirPlayServer(
             return
         }
 
+        if (handleVideo(s, out, proto, method, uri, headers, body, cseq)) return
+
         when (method) {
             "OPTIONS" -> {
                 send(
@@ -299,6 +374,137 @@ class AirPlayServer(
             log("  govde: $preview${if (body.size > 48) "..." else ""}")
         }
         send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
+    }
+
+    // ---- Video AirPlay (/play) -----------------------------------------------------------
+
+    private fun queryParam(uri: String, key: String): String? =
+        uri.substringAfter('?', "").split('&')
+            .map { it.split('=', limit = 2) }
+            .firstOrNull { it[0] == key }?.getOrNull(1)
+
+    private fun handleVideo(
+        s: Session,
+        out: OutputStream,
+        proto: String,
+        method: String,
+        uri: String,
+        headers: Map<String, String>,
+        body: ByteArray,
+        cseq: String?
+    ): Boolean {
+        val path = uri.substringBefore('?')
+        val plist = "application/x-apple-binary-plist"
+        when {
+            method == "POST" && path == "/reverse" -> {
+                // HTTP baglantisi ters cevrilir: bundan sonra TV, iPhone'a /event yollayabilir.
+                reverse = s
+                headers["x-apple-session-id"]?.let { videoSessionId = it }
+                val resp = "$proto 101 Switching Protocols\r\n" +
+                    "Upgrade: PTTH/1.0\r\nConnection: Upgrade\r\n" +
+                    (if (cseq != null) "CSeq: $cseq\r\n" else "") + "\r\n"
+                synchronized(out) {
+                    out.write(resp.toByteArray(Charsets.ISO_8859_1))
+                    out.flush()
+                }
+                log("  /reverse: olay kanali acildi")
+                return true
+            }
+            method == "POST" && path == "/play" -> {
+                var url: String? = null
+                var startSec = -1.0
+                var startFrac = -1.0
+                val ctype = headers["content-type"] ?: ""
+                if (ctype.contains("plist")) {
+                    try {
+                        val root = PropertyListParser.parse(body) as? NSDictionary
+                        if (root != null) {
+                            log("  /play plist: " + root.toXMLPropertyList().replace(Regex("\\s+"), " ").take(700))
+                            url = (root.objectForKey("Content-Location") as? NSString)?.content
+                            (root.objectForKey("Start-Position-Seconds") as? NSNumber)?.let { startSec = it.doubleValue() }
+                            (root.objectForKey("Start-Position") as? NSNumber)?.let { startFrac = it.doubleValue() }
+                            videoSessionPlist = root.objectForKey("sessionID")
+                        }
+                    } catch (e: Exception) {
+                        log("  /play plist okunamadi: ${e.message}")
+                    }
+                } else {
+                    // Eski bicim: text/parameters
+                    val text = String(body, Charsets.ISO_8859_1)
+                    log("  /play metin: " + text.replace("\r", "").replace("\n", " | ").take(300))
+                    for (line in text.lines()) {
+                        val kv = line.split(":", limit = 2)
+                        if (kv.size < 2) continue
+                        when (kv[0].trim().lowercase()) {
+                            "content-location" -> url = kv[1].trim()
+                            "start-position" -> startFrac = kv[1].trim().toDoubleOrNull() ?: -1.0
+                        }
+                    }
+                }
+                headers["x-apple-session-id"]?.let { videoSessionId = it }
+                val u = url
+                if (u == null || !(u.startsWith("http://") || u.startsWith("https://"))) {
+                    log("  /play desteklenmiyor: ${u ?: "adres yok"}")
+                    send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
+                    return true
+                }
+                log("  /play: $u")
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                video.videoPlay(u, startSec, startFrac)
+                return true
+            }
+            method == "GET" && path == "/playback-info" -> {
+                val i = video.videoInfo()
+                val d = NSDictionary()
+                d.put("readyToPlay", NSNumber(i.ready))
+                d.put("playbackBufferEmpty", NSNumber(i.bufferEmpty))
+                d.put("playbackBufferFull", NSNumber(false))
+                d.put("playbackLikelyToKeepUp", NSNumber(i.ready && !i.bufferEmpty))
+                d.put("rate", NSNumber(i.rate.toDouble()))
+                if (i.active && i.duration > 0) {
+                    d.put("duration", NSNumber(i.duration))
+                    d.put("position", NSNumber(i.position))
+                    val range = NSDictionary()
+                    range.put("start", NSNumber(0.0))
+                    range.put("duration", NSNumber(i.duration))
+                    d.put("loadedTimeRanges", NSArray(range))
+                    val seek = NSDictionary()
+                    seek.put("start", NSNumber(0.0))
+                    seek.put("duration", NSNumber(i.duration))
+                    d.put("seekableTimeRanges", NSArray(seek))
+                }
+                send(out, proto, 200, "OK", BinaryPropertyListWriter.writeToArray(d), plist, cseq)
+                return true
+            }
+            method == "POST" && path == "/rate" -> {
+                val v = queryParam(uri, "value")?.toFloatOrNull() ?: 0f
+                video.videoRate(v)
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return true
+            }
+            method == "POST" && path == "/scrub" -> {
+                queryParam(uri, "position")?.toDoubleOrNull()?.let { video.videoSeek(it) }
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return true
+            }
+            method == "GET" && path == "/scrub" -> {
+                val i = video.videoInfo()
+                val text = "duration: %f\r\nposition: %f\r\n".format(java.util.Locale.US, i.duration, i.position)
+                send(out, proto, 200, "OK", text.toByteArray(), "text/parameters", cseq)
+                return true
+            }
+            method == "POST" && path == "/stop" -> {
+                video.videoStop()
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return true
+            }
+            (method == "POST" && (path == "/action" || path == "/event")) ||
+                path == "/getProperty" || path == "/setProperty" -> {
+                send(out, proto, 200, "OK", ByteArray(0), null, cseq)
+                return true
+            }
+        }
+        return false
     }
 
     // ---- SETUP / TEARDOWN ----------------------------------------------------------------

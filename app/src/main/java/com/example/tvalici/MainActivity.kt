@@ -6,6 +6,8 @@ import android.graphics.Color
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.Surface
@@ -20,6 +22,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
@@ -33,7 +36,7 @@ import java.net.NetworkInterface
 import java.security.SecureRandom
 
 @Suppress("UnsafeOptInUsageError")
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), VideoEvents {
 
     /** Her uygulama acilisinda yeni 4 haneli PIN; QR'a gomulu oldugu icin elle girmek gerekmez. */
     private val pin = "%04d".format(SecureRandom().nextInt(10000))
@@ -60,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         override fun mirrorStarted() {
             runOnUiThread {
                 player?.stop()
+                airplayVideoActive = false
                 overlayView.visibility = android.view.View.GONE
             }
         }
@@ -69,12 +73,31 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun mirrorStopped() {
-            runOnUiThread { overlayView.visibility = android.view.View.VISIBLE }
+            runOnUiThread {
+                if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
+            }
         }
     }
 
     private val port = 8080
     private val airplayPort = 7000
+
+    // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var videoSnapshot = VideoInfo()
+    private var airplayVideoActive = false
+    private var pendingStartSec = -1.0
+    private var pendingStartFrac = -1.0
+    private var lastVideoState = ""
+
+    private val snapshotTicker = object : Runnable {
+        override fun run() {
+            updateSnapshot()
+            if (airplayVideoActive) mainHandler.postDelayed(this, 500)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +110,36 @@ class MainActivity : AppCompatActivity() {
                 override fun onPlayerError(error: PlaybackException) {
                     appendLog("Oynatma hatası: ${error.errorCodeName}")
                     overlayView.visibility = android.view.View.VISIBLE
+                    if (airplayVideoActive) endAirplayVideo()
+                }
+
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (!airplayVideoActive) return
+                    if (state == Player.STATE_READY && (pendingStartSec >= 0 || pendingStartFrac >= 0)) {
+                        val dur = p.duration
+                        val ms = when {
+                            pendingStartSec >= 0 -> (pendingStartSec * 1000).toLong()
+                            dur > 0 -> (pendingStartFrac * dur).toLong()
+                            else -> 0L
+                        }
+                        pendingStartSec = -1.0
+                        pendingStartFrac = -1.0
+                        if (ms > 0) p.seekTo(ms)
+                    }
+                    if (state == Player.STATE_ENDED) {
+                        reportVideoState("stopped")
+                    }
+                    updateSnapshot()
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (!airplayVideoActive) return
+                    when {
+                        isPlaying -> reportVideoState("playing")
+                        p.playbackState == Player.STATE_BUFFERING -> reportVideoState("loading")
+                        !p.playWhenReady -> reportVideoState("paused")
+                    }
+                    updateSnapshot()
                 }
             })
         }
@@ -156,7 +209,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             val airplayInfo = AirPlayInfo.load(this, "TV Alici")
-            airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents) { msg -> appendLog(msg) }
+            airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents, this) { msg -> appendLog(msg) }
                 .also { it.start() }
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
                 .also { it.start() }
@@ -166,6 +219,88 @@ class MainActivity : AppCompatActivity() {
 
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         Updater(this).check()
+    }
+
+    // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
+
+    override fun videoPlay(url: String, startSeconds: Double, startFraction: Double) {
+        runOnUiThread {
+            val p = player ?: return@runOnUiThread
+            // Yansitma yuzeyi eski kareyi tutabilir: videoyu kapatmasin diye 1x1'e kucult.
+            mirrorView.layoutParams = FrameLayout.LayoutParams(1, 1, Gravity.CENTER)
+            overlayView.visibility = android.view.View.GONE
+            pendingStartSec = startSeconds
+            pendingStartFrac = startFraction
+            airplayVideoActive = true
+            lastVideoState = ""
+            val item = MediaItem.Builder().setUri(url).apply {
+                if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+            }.build()
+            p.setMediaItem(item)
+            p.prepare()
+            p.playWhenReady = true
+            appendLog("Video yükleniyor")
+            reportVideoState("loading")
+            mainHandler.removeCallbacks(snapshotTicker)
+            mainHandler.post(snapshotTicker)
+        }
+    }
+
+    override fun videoRate(rate: Float) {
+        runOnUiThread {
+            val p = player ?: return@runOnUiThread
+            if (rate <= 0f) {
+                p.pause()
+            } else {
+                p.setPlaybackSpeed(rate)
+                p.play()
+            }
+        }
+    }
+
+    override fun videoSeek(seconds: Double) {
+        runOnUiThread { player?.seekTo((seconds * 1000).toLong().coerceAtLeast(0L)) }
+    }
+
+    override fun videoStop() {
+        runOnUiThread {
+            player?.stop()
+            overlayView.visibility = android.view.View.VISIBLE
+            endAirplayVideo(notify = false)
+        }
+    }
+
+    override fun videoInfo(): VideoInfo = videoSnapshot
+
+    private fun reportVideoState(state: String) {
+        if (state == lastVideoState) return
+        lastVideoState = state
+        airplayServer?.notifyVideoState(state)
+    }
+
+    private fun endAirplayVideo(notify: Boolean = true) {
+        if (notify) reportVideoState("stopped")
+        airplayVideoActive = false
+        mainHandler.removeCallbacks(snapshotTicker)
+        videoSnapshot = VideoInfo()
+    }
+
+    /** Ana is parcacigindan cagrilir; sunucu is parcaciklari bu kopyayi okur. */
+    private fun updateSnapshot() {
+        val p = player
+        if (p == null || !airplayVideoActive) {
+            videoSnapshot = VideoInfo()
+            return
+        }
+        val dur = if (p.duration > 0) p.duration / 1000.0 else 0.0
+        videoSnapshot = VideoInfo(
+            active = true,
+            duration = dur,
+            position = p.currentPosition / 1000.0,
+            rate = if (p.isPlaying) p.playbackParameters.speed else 0f,
+            ready = p.playbackState == Player.STATE_READY || p.playbackState == Player.STATE_ENDED,
+            bufferEmpty = p.playbackState == Player.STATE_BUFFERING
+        )
     }
 
     /** Yansitilan goruntuyu en-boy oranini bozmadan ekrana sigdirir (kenarlarda siyah bosluk). */
@@ -236,6 +371,7 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (overlayView.visibility == android.view.View.GONE) {
             player?.stop()
+            if (airplayVideoActive) endAirplayVideo()
             airplayServer?.stopAllMirrors()
             overlayView.visibility = android.view.View.VISIBLE
         } else {
@@ -244,6 +380,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
         server?.stop()
         airplayServer?.stop()
         airplayAdvertiser?.stop()
