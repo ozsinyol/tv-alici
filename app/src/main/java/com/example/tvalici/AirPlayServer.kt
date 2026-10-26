@@ -226,6 +226,11 @@ class AirPlayServer(
                     }
 
                     val length = headers["content-length"]?.toIntOrNull() ?: 0
+                    if (length < 0 || length > MAX_BODY_BYTES) {
+                        // Sinirsiz ayirma OutOfMemoryError ile uygulamayi cokertirdi (Exception degil, yakalanmaz).
+                        log("İstek gövdesi çok büyük ($length B), bağlantı kapatıldı")
+                        return
+                    }
                     val body = ByteArray(length)
                     var read = 0
                     while (read < length) {
@@ -811,3 +816,6 @@ class AirPlayServer(
         return buf.toString("ISO-8859-1")
     }
 }
+
+/** Bir RTSP/HTTP isteginin gövdesi icin ust sinir (fotograflar birkac MB olabilir). */
+private const val MAX_BODY_BYTES = 32 * 1024 * 1024

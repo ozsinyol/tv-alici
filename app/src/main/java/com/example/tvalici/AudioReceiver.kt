@@ -9,6 +9,8 @@ import android.os.Build
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.nio.ByteBuffer
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -54,8 +56,15 @@ class AudioReceiver(
 
     @Volatile
     private var outChannels = 2
+    @Volatile
     private var appliedDelayMs = 0
+
+    @Volatile
     private var skipBytes = 0
+
+    // Cozulmus PCM parcalari. Cozucuyu bosaltan is parcacigi ile AudioTrack'e yazan is parcacigi ayrilir: sessizlik
+    // yazarken (bloklayan yazma) cozucu durmaz, gelen paketler atilmaz; ses tam eklenen gecikme kadar ertelenir.
+    private val pcmQueue = LinkedBlockingQueue<ByteArray>()
 
     /** Ses akisini baslatir. Codec desteklenmiyorsa false doner (ses yok sayilir). */
     fun start(): Boolean {
@@ -78,6 +87,7 @@ class AudioReceiver(
             c.start()
             codec = c
             startDrain(c)
+            startWriter()
         } catch (e: Exception) {
             log("Ses çözücüsü kurulamadı: ${e.javaClass.simpleName} ${e.message}")
             releaseAll()
@@ -166,6 +176,7 @@ class AudioReceiver(
 
     private fun startDrain(c: MediaCodec) {
         thread(name = "audio-drain", isDaemon = true) {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
             val info = MediaCodec.BufferInfo()
             while (running && codec === c) {
                 try {
@@ -173,19 +184,14 @@ class AudioReceiver(
                     when {
                         i >= 0 -> {
                             val out = c.getOutputBuffer(i)
-                            val t = track
-                            if (out != null && t != null && info.size > 0) {
-                                out.position(info.offset)
+                            if (out != null && track != null && info.size > 0) {
+                                val pcm = ByteArray(info.size)
                                 out.limit(info.offset + info.size)
-                                applyDelay(t)
-                                var n = info.size
-                                if (skipBytes > 0) {
-                                    val s = minOf(skipBytes, n)
-                                    out.position(info.offset + s)
-                                    skipBytes -= s
-                                    n -= s
-                                }
-                                if (n > 0) t.write(out, n, AudioTrack.WRITE_BLOCKING)
+                                out.position(info.offset)
+                                out.get(pcm, 0, info.size)
+                                pcmQueue.offer(pcm)
+                                // Yazici yetisemezse gecikme birikmesin: en eski parcalar atilir.
+                                while (pcmQueue.size > MAX_QUEUED_CHUNKS) pcmQueue.poll()
                             }
                             c.releaseOutputBuffer(i, false)
                         }
@@ -198,7 +204,37 @@ class AudioReceiver(
         }
     }
 
-    /** SyncSettings'teki ses gecikmesi degistiyse sessizlik ekler ya da kisa bir kismi atlar. */
+    /** PCM parcalarini sirayla AudioTrack'e yazar; ses/goruntu gecikme ayarini da burada uygular. */
+    private fun startWriter() {
+        thread(name = "audio-write", isDaemon = true) {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+            while (running) {
+                try {
+                    val chunk = pcmQueue.poll(50, TimeUnit.MILLISECONDS) ?: continue
+                    val t = track ?: continue
+                    applyDelay(t)
+                    var off = 0
+                    var n = chunk.size
+                    val skip = skipBytes
+                    if (skip > 0) {
+                        val s = minOf(skip, n)
+                        off = s
+                        skipBytes = skip - s
+                        n -= s
+                    }
+                    if (n > 0) t.write(chunk, off, n, AudioTrack.WRITE_BLOCKING)
+                } catch (e: Exception) {
+                    if (!running) break
+                }
+            }
+        }
+    }
+
+    /**
+     * SyncSettings'teki ses gecikmesi degistiyse sessizlik ekler ya da kisa bir kismi atlar.
+     * Sessizlik 20 ms'lik parcalarla yazilir (dusuk gecikme kipi kucuk yazimlari ister); yalnizca yazici is
+     * parcacigi bekler, cozucu calismaya devam eder.
+     */
     private fun applyDelay(t: AudioTrack) {
         val want = SyncSettings.audioDelayMs
         if (want == appliedDelayMs) return
@@ -208,11 +244,17 @@ class AudioReceiver(
             val cancel = minOf(skipBytes, bytes)
             skipBytes -= cancel
             bytes -= cancel
-            if (bytes > 0) t.write(ByteBuffer.allocate(bytes), bytes, AudioTrack.WRITE_BLOCKING)
+            appliedDelayMs = want // yazmadan once: bu sirada flush() gelirse sifirlamasi bozulmasin
+            val silence = ByteArray(minOf(bytes, outRate / 50 * frameBytes))
+            while (bytes > 0 && running && track === t) {
+                val n = minOf(bytes, silence.size)
+                t.write(silence, 0, n, AudioTrack.WRITE_BLOCKING)
+                bytes -= n
+            }
         } else {
             skipBytes += (appliedDelayMs - want) * outRate / 1000 * frameBytes
+            appliedDelayMs = want
         }
-        appliedDelayMs = want
     }
 
     private fun createTrack(f: MediaFormat) {
@@ -270,6 +312,7 @@ class AudioReceiver(
     /** Arabellegi bosaltir (FLUSH istegi). */
     fun flush() {
         try {
+            pcmQueue.clear()
             track?.pause()
             track?.flush()
             track?.play()
@@ -282,7 +325,13 @@ class AudioReceiver(
 
     fun stop() {
         running = false
+        pcmQueue.clear()
         releaseAll()
+    }
+
+    private companion object {
+        /** Yazici gerideyse kuyruk bu kadar parcayi (~1,5 sn) gecmez; fazlasi atilir. */
+        const val MAX_QUEUED_CHUNKS = 150
     }
 
     private fun releaseAll() {
