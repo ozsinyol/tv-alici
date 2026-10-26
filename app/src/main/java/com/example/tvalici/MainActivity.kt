@@ -123,7 +123,7 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         SyncSettings.offsetMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
             .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
         SyncSettings.jitterBufferMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
-            .getInt("jitterBufferMs", SyncSettings.DEFAULT_JITTER_MS).coerceIn(0, SyncSettings.MAX_JITTER_MS)
+            .getInt("jitterBufferMs", SyncSettings.AUTO).coerceIn(SyncSettings.AUTO, SyncSettings.MAX_JITTER_MS)
 
         val playerView = PlayerView(this)
         // Video AirPlay (/play): varsayilan 2,5 sn / 5 sn yerine daha erken baslat ve takilma sonrasi daha cabuk devam et.
@@ -458,11 +458,21 @@ class MainActivity : AppCompatActivity(), VideoEvents {
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+            // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
-            val v = (SyncSettings.jitterBufferMs + step).coerceIn(0, SyncSettings.MAX_JITTER_MS)
+            val v = (SyncSettings.effectiveJitterMs + step).coerceIn(0, SyncSettings.MAX_JITTER_MS)
             SyncSettings.jitterBufferMs = v
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", v).apply()
-            val text = if (v == 0) "Görüntü tamponu: kapalı" else "Görüntü tamponu: $v ms (ses de aynı kadar gecikir)"
+            val text = if (v == 0) "Görüntü tamponu: kapalı (OK = otomatik)"
+            else "Görüntü tamponu: $v ms, elle (OK = otomatik; ses de aynı kadar gecikir)"
+            appendLog(text)
+            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+            return true
+        }
+        if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+            SyncSettings.jitterBufferMs = SyncSettings.AUTO
+            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
+            val text = "Görüntü tamponu: otomatik (şu an ${SyncSettings.autoJitterMs} ms)"
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true

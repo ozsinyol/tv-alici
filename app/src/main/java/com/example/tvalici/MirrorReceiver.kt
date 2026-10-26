@@ -115,6 +115,9 @@ class MirrorReceiver(
         var prevMinD = Long.MAX_VALUE
         val jitSamples = LongArray(300)
         var srcGapOver50 = 0
+        // Otomatik tampon: son 150 karenin titremesinden gereken tampon hesaplanir.
+        val adaptSamples = LongArray(150)
+        var adaptCount = 0
         while (running) {
             input.readFully(header)
             val hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
@@ -151,7 +154,7 @@ class MirrorReceiver(
                         }
                         lastArrivalNs = now
                         val ts = hb.getLong(8)
-                        val bufferNs = SyncSettings.jitterBufferMs * 1_000_000L
+                        val bufferNs = SyncSettings.effectiveJitterMs * 1_000_000L
                         var j = 0L
                         if (frames == 0) {
                             arr0 = now
@@ -180,6 +183,13 @@ class MirrorReceiver(
                             if ((ts - lastTs).toDouble() * 1000.0 / 4294967296.0 > 50.0) srcGapOver50++
                         }
                         jitSamples[frames % 300] = j
+                        if (frames > 0 && SyncSettings.jitterBufferMs < 0) {
+                            adaptSamples[adaptCount++] = j
+                            if (adaptCount == adaptSamples.size) {
+                                autoTune(adaptSamples)
+                                adaptCount = 0
+                            }
+                        }
                         lastTs = ts
                         val targetNs = if (bufferNs > 0) now - j + bufferNs else 0L
                         decoder.feed(payload, size, kind == FRAME_IDR, targetNs)
@@ -195,7 +205,8 @@ class MirrorReceiver(
                             val over = sorted.count { it > bufferNs }
                             log(
                                 "Titreme: p50 ${fmtMs(sorted[149])}, p95 ${fmtMs(sorted[284])}, p99 ${fmtMs(sorted[296])}, " +
-                                    "en çok ${fmtMs(sorted[299])} ms | tampon ${SyncSettings.jitterBufferMs} ms, " +
+                                    "en çok ${fmtMs(sorted[299])} ms | tampon ${SyncSettings.effectiveJitterMs} ms" +
+                                    "${if (SyncSettings.jitterBufferMs < 0) " (otomatik)" else ""}, " +
                                     "tamponu aşan kare: $over/300 | iPhone'da 50 ms üstü boşluk: $srcGapOver50"
                             )
                             gapSumNs = 0L; gapMaxNs = 0L; gapCount = 0; gapOver50 = 0
@@ -215,6 +226,40 @@ class MirrorReceiver(
      * AVCC (4 bayt uzunluk) -> Annex-B (00 00 00 01), yerinde.
      * Donus: FRAME_INVALID, FRAME_DELTA (P kare) ya da FRAME_IDR (anahtar kare, NAL turu 5 iceriyor).
      */
+    private var lowWindows = 0
+
+    /**
+     * Otomatik tampon: son pencerenin %98'lik titremesi + 10 ms, 20 ms'e yukari yuvarlanir (40-160 ms).
+     * Artis hemen (pencere basina en cok +40 ms), azalis ise ancak ust uste 3 pencere dusukse ve 20 ms'lik adimlarla:
+     * tampon degisince ses de ayni kadar sessizlik eklenir/atlanir, sik degisim duyulur.
+     */
+    private fun autoTune(samples: LongArray) {
+        val sorted = samples.copyOf().also { it.sort() }
+        val p98Ms = sorted[sorted.size * 98 / 100] / 1_000_000
+        val desired = (((p98Ms + AUTO_MARGIN_MS + 19) / 20) * 20).toInt()
+            .coerceIn(SyncSettings.AUTO_MIN_MS, SyncSettings.AUTO_MAX_MS)
+        val cur = SyncSettings.autoJitterMs
+        var next = cur
+        when {
+            desired > cur -> {
+                lowWindows = 0
+                next = minOf(desired, cur + 40)
+            }
+            desired < cur -> {
+                lowWindows++
+                if (lowWindows >= 3) {
+                    lowWindows = 0
+                    next = cur - 20
+                }
+            }
+            else -> lowWindows = 0
+        }
+        if (next != cur) {
+            SyncSettings.autoJitterMs = next
+            log("Otomatik tampon: $cur -> $next ms (titremenin %98'i ${p98Ms} ms)")
+        }
+    }
+
     private fun fmtMs(ns: Long): String = "${ns / 1_000_000}.${(ns % 1_000_000) / 100_000}"
 
     private fun toAnnexB(data: ByteArray, size: Int): Int {
@@ -273,5 +318,6 @@ class MirrorReceiver(
         const val FRAME_INVALID = 0
         const val FRAME_DELTA = 1
         const val FRAME_IDR = 2
+        const val AUTO_MARGIN_MS = 10L
     }
 }

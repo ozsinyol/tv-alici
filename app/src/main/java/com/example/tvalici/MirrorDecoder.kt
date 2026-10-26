@@ -182,7 +182,7 @@ class MirrorDecoder(
             waitKey = false
         }
         val backlog = if (outputStarted) queue.size else 0
-        val cap = MAX_BACKLOG + (SyncSettings.videoDelayMs + SyncSettings.jitterBufferMs) / 8
+        val cap = MAX_BACKLOG + (SyncSettings.videoDelayMs + SyncSettings.effectiveJitterMs) / 8
         // "Geride": kuyruktaki en eski karenin cizim zamani 50 ms'den fazla gecmis (tampon icinde bekleyen kareler geride sayilmaz).
         val behind = backlog >= 2 && queue.peek()?.let {
             System.nanoTime() - it.baseNs - SyncSettings.videoDelayMs * 1_000_000L > 50_000_000L
