@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="120" alt="TV Alıcı logosu"></p>
+
 # TV Alıcı
 
 iPhone'dan (Safari, uygulama kurmadan) Android TV'ye video gönderme prototipi.
