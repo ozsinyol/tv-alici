@@ -40,7 +40,7 @@ import java.net.NetworkInterface
 import java.security.SecureRandom
 
 @Suppress("UnsafeOptInUsageError")
-class MainActivity : AppCompatActivity(), VideoEvents {
+class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     /** Her uygulama acilisinda yeni 4 haneli PIN; QR'a gomulu oldugu icin elle girmek gerekmez. */
     private val pin = "%04d".format(SecureRandom().nextInt(10000))
@@ -96,6 +96,10 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         )
     }
     private lateinit var photoView: ImageView
+    private lateinit var infoLabel: TextView
+    private var airplayInfoRef: AirPlayInfo? = null
+    private var serverUrl = ""
+    private var baseLabel = ""
 
     // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -171,15 +175,19 @@ class MainActivity : AppCompatActivity(), VideoEvents {
         }
 
         val url = "http://${localIp()}:$port"
+        serverUrl = url
 
         val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
         val label = TextView(this).apply {
-            text = "iPhone kamerasiyla QR'i okutun\n$url  PIN: $pin\nGünlük: $url/log?pin=$pin\nGüvenilen cihazlar: $url/trusted?pin=$pin"
+            text = baseLabelText()
             textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        infoLabel = label
+        baseLabel = label.text.toString()
+        updateAutostartHint()
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -227,14 +235,15 @@ class MainActivity : AppCompatActivity(), VideoEvents {
                 pin,
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
-                approvals
+                approvals,
+                this
             ).also { it.start() }
         } catch (e: Exception) {
             appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
         }
 
         try {
-            val airplayInfo = AirPlayInfo.load(this, "TV Alici")
+            val airplayInfo = AirPlayInfo.load(this, serverName()).also { airplayInfoRef = it }
             airplayServer = AirPlayServer(airplayPort, airplayInfo, mirrorEvents, this, approvals) { msg -> appendLog(msg) }
                 .also { it.start() }
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
@@ -491,7 +500,43 @@ class MainActivity : AppCompatActivity(), VideoEvents {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_MENU && overlayView.visibility == android.view.View.VISIBLE) {
+            val on = !autostartOn()
+            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("autostart", on).apply()
+            updateAutostartHint()
+            Toast.makeText(this, "Açılışta otomatik başlat: " + if (on) "açık" else "kapalı", Toast.LENGTH_SHORT).show()
+            return true
+        }
         return super.onKeyDown(keyCode, event)
+    }
+
+    private fun baseLabelText(): String =
+        "iPhone kamerasiyla QR'i okutun\n$serverUrl  PIN: $pin\n" +
+            "AirPlay adı: ${serverName()}  (değiştir: $serverUrl/name?pin=$pin)\n" +
+            "Günlük: $serverUrl/log?pin=$pin\nGüvenilen cihazlar: $serverUrl/trusted?pin=$pin"
+
+    override fun serverName(): String =
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).getString("serverName", null) ?: "TV Alici"
+
+    override fun setServerName(raw: String): Boolean {
+        val n = raw.replace(Regex("[\\p{Cntrl}@]"), " ").trim().replace(Regex("\\s+"), " ")
+        if (n.isEmpty() || n.length > 32 || n.toByteArray().size > 40) return false
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putString("serverName", n).apply()
+        airplayInfoRef?.name = n
+        airplayAdvertiser?.restart()
+        appendLog("AirPlay adı değişti: $n")
+        runOnUiThread {
+            baseLabel = baseLabelText()
+            updateAutostartHint()
+        }
+        return true
+    }
+
+    private fun autostartOn(): Boolean =
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("autostart", false)
+
+    private fun updateAutostartHint() {
+        infoLabel.text = baseLabel + "\nMENU: TV açılınca otomatik başlat: " + if (autostartOn()) "açık" else "kapalı"
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */

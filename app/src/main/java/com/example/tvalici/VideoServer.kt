@@ -9,16 +9,26 @@ import java.io.IOException
  * GET  /               -> video secme ve kumanda sayfasi
  * PUT  /upload         -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
  * POST /control?cmd=.. -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop)
+ * GET  /name?pin=..[&set=AD] -> AirPlay'de gorunen sunucu adini gosterir/degistirir
  * GET  /trusted?pin=..[&forget=IP | &clear=1] -> AirPlay icin guvenilen cihazlari listeler/siler
  * Yukleme ve kumanda isteklerinde X-Pin basligi TV'de gosterilen PIN ile eslesmelidir.
  */
+/** AirPlay'de gorunen sunucu adini okuma/degistirme. */
+interface NameAdmin {
+    fun serverName(): String
+
+    /** Gecerliyse adi kaydedip yayini yeniler; gecersizse false doner. */
+    fun setServerName(raw: String): Boolean
+}
+
 class VideoServer(
     port: Int,
     private val dir: File,
     private val pin: String,
     private val onUploadStart: (Upload) -> Unit,
     private val onControl: (String) -> Unit,
-    private val trust: TrustAdmin
+    private val trust: TrustAdmin,
+    private val names: NameAdmin
 ) : NanoHTTPD(port) {
 
     override fun serve(session: IHTTPSession): Response {
@@ -31,8 +41,32 @@ class VideoServer(
                 else text(LogBuffer.dump())
             }
             path == "/trusted" -> handleTrusted(session)
+            path == "/name" -> handleName(session)
             else -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", PAGE)
         }
+    }
+
+    private fun esc(t: String): String =
+        t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+    private fun handleName(session: IHTTPSession): Response {
+        if (session.parms["pin"] != pin) return text("PIN yanlış (/name?pin=XXXX)", Response.Status.UNAUTHORIZED)
+        val wanted = session.parms["set"]
+        val msg = when {
+            wanted == null -> ""
+            names.setServerName(wanted) -> "Kaydedildi. iPhone'da AirPlay listesi birkaç saniye içinde yenilenir."
+            else -> "Geçersiz ad (1-32 karakter; @ ve kontrol karakterleri olmaz)."
+        }
+        val html = "<!doctype html><html lang=\"tr\"><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+            "<title>AirPlay adı</title></head><body style=\"font-family:-apple-system,sans-serif;padding:24px\">" +
+            "<h2>AirPlay sunucu adı</h2>" +
+            "<form method=\"get\" action=\"/name\">" +
+            "<input type=\"hidden\" name=\"pin\" value=\"${esc(pin)}\">" +
+            "<input type=\"text\" name=\"set\" value=\"${esc(names.serverName())}\" maxlength=\"32\" style=\"font-size:18px;padding:8px\"> " +
+            "<button type=\"submit\" style=\"font-size:18px;padding:8px 14px\">Kaydet</button></form>" +
+            "<p>${esc(msg)}</p></body></html>"
+        return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", html)
     }
 
     private fun handleTrusted(session: IHTTPSession): Response {

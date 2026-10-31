@@ -3,11 +3,13 @@ package com.example.tvalici
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Handler
+import android.os.Looper
 import java.security.SecureRandom
 
 /** TV'nin AirPlay alicisi olarak kendini tanitirken kullandigi bilgiler. */
 class AirPlayInfo(
-    val name: String,
+    @Volatile var name: String,
     val deviceId: String,
     val seed: ByteArray
 ) {
@@ -55,6 +57,13 @@ class AirPlayAdvertiser(
 ) {
     private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     private val listeners = mutableListOf<NsdManager.RegistrationListener>()
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Ad degisince servisleri yeni adla yeniden yayinlar. */
+    fun restart() {
+        stop()
+        handler.postDelayed({ start() }, 800)
+    }
 
     fun start() {
         register(
@@ -95,6 +104,7 @@ class AirPlayAdvertiser(
     }
 
     fun stop() {
+        handler.removeCallbacksAndMessages(null)
         for (l in listeners) {
             try {
                 nsd.unregisterService(l)
