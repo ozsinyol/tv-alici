@@ -12,9 +12,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -101,6 +103,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         )
     }
     private lateinit var photoView: ImageView
+    private lateinit var overlayContent: LinearLayout
     private lateinit var trackArt: ImageView
     private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
@@ -210,14 +213,19 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         infoLabel = label
         baseLabel = label.text.toString()
         updateAutostartHint()
-        overlayView = LinearLayout(this).apply {
+        overlayContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.BLACK)
             addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(trackArt, LinearLayout.LayoutParams(260, 260).apply { topMargin = 24 })
             addView(trackText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        }
+        overlayView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.BLACK)
+            addView(overlayContent, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
         mirrorView = SurfaceView(this).apply {
@@ -280,6 +288,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
 
         watchNetwork()
+        mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         updater.check()
     }
@@ -483,6 +492,78 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    // ---- Bosta kalinca zıplayan QR (DVD logosu gibi; ekran yanmasini da onler) ---------------
+
+    private var idleSince = SystemClock.elapsedRealtime()
+    private var bouncing = false
+    private var bx = 0f
+    private var by = 0f
+    private var bvx = 4f
+    private var bvy = 3f
+    private val bounceColors = intArrayOf(
+        Color.WHITE, Color.rgb(255, 99, 132), Color.rgb(54, 162, 235), Color.rgb(255, 206, 86),
+        Color.rgb(75, 192, 120), Color.rgb(153, 102, 255), Color.rgb(255, 159, 64)
+    )
+    private var bounceColor = 0
+
+    private val bounceTicker = object : Runnable {
+        override fun run() {
+            bounceStep()
+            mainHandler.postDelayed(this, 40)
+        }
+    }
+
+    private fun bounceStep() {
+        val now = SystemClock.elapsedRealtime()
+        if (overlayView.visibility != android.view.View.VISIBLE) {
+            idleSince = now
+            if (bouncing) stopBounce()
+            return
+        }
+        if (now - idleSince < 20_000L) return
+        bouncing = true
+        val maxX = (overlayView.width - overlayContent.width) / 2f
+        val maxY = (overlayView.height - overlayContent.height) / 2f
+        var hitX = false
+        var hitY = false
+        bx += bvx
+        by += bvy
+        if (maxX <= 0f) bx = 0f
+        else if (bx > maxX) { bx = maxX; bvx = -bvx; hitX = true }
+        else if (bx < -maxX) { bx = -maxX; bvx = -bvx; hitX = true }
+        if (maxY <= 0f) by = 0f
+        else if (by > maxY) { by = maxY; bvy = -bvy; hitY = true }
+        else if (by < -maxY) { by = -maxY; bvy = -bvy; hitY = true }
+        if (hitX || hitY) {
+            bounceColor = (bounceColor + 1) % bounceColors.size
+            infoLabel.setTextColor(bounceColors[bounceColor])
+            trackText.setTextColor(bounceColors[bounceColor])
+            if (hitX && hitY) Toast.makeText(this, "🎉", Toast.LENGTH_SHORT).show()
+        }
+        overlayContent.translationX = bx
+        overlayContent.translationY = by
+    }
+
+    private fun stopBounce() {
+        bouncing = false
+        bx = 0f
+        by = 0f
+        overlayContent.translationX = 0f
+        overlayContent.translationY = 0f
+        infoLabel.setTextColor(Color.WHITE)
+        trackText.setTextColor(Color.WHITE)
+    }
+
+    private fun userActivity() {
+        idleSince = SystemClock.elapsedRealtime()
+        if (bouncing) stopBounce()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        userActivity()
+        return super.dispatchTouchEvent(ev)
+    }
+
     // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
     private val uploadQueue = ArrayDeque<Upload>()
     private var currentUpload: Upload? = null
@@ -574,6 +655,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        userActivity()
         if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
