@@ -6,6 +6,10 @@ Uygulama açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfadan vi
 
 > Bu belgede geçen "TV", uygulamanın kurulu olduğu Android cihaz anlamına da gelir; telefon ve tablette de aynı şekilde çalışır. Kumanda tuşlarıyla yapılan ayarlar için bkz. [Android telefon/tablette kullanım](#android-telefontablette-kullanım).
 
+## Diller
+
+Uygulama arayüzü ve web sayfası (8080) cihaz/tarayıcı diline uyar: **İngilizce** (varsayılan) ve **Türkçe**. English summary: [README.en.md](README.en.md). Yeni dil eklemek için `app/src/main/res/values-<kod>/strings.xml` oluşturun ve `VideoServer.kt` içindeki `DIL` tablosuna bir blok ekleyin. Geliştirici günlüğü Türkçe kalır.
+
 ## APK'yı GitHub Actions ile derleme
 
 1. Bu klasörü bir GitHub deposuna yükleyin (`main` dalı).

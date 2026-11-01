@@ -75,7 +75,7 @@ class GrowingFileDataSource(private val upload: Upload) : DataSource {
     override fun open(dataSpec: DataSpec): Long {
         currentUri = dataSpec.uri
         position = dataSpec.position
-        if (position > upload.totalSize) throw IOException("Konum dosya boyutunu aşıyor")
+        if (position > upload.totalSize) throw IOException("Position exceeds file size")
         val wanted =
             if (dataSpec.length == C.LENGTH_UNSET.toLong()) upload.totalSize - position
             else dataSpec.length
@@ -91,7 +91,7 @@ class GrowingFileDataSource(private val upload: Upload) : DataSource {
         if (remaining <= 0L) return C.RESULT_END_OF_INPUT
         val available = upload.awaitBytes(position)
         if (available <= 0L) {
-            if (upload.failed) throw IOException("Yükleme yarıda kesildi")
+            if (upload.failed) throw IOException("Upload was interrupted")
             return C.RESULT_END_OF_INPUT
         }
         val toRead = minOf(length.toLong(), available, remaining).toInt()

@@ -79,7 +79,7 @@ class Approvals(
     override fun trustedList(): List<String> {
         val perm = trusted()
         return (perm + allowedNow).sorted().map { ip ->
-            if (ip in perm) "$ip (kalıcı)" else "$ip (bu açılışta)"
+            if (ip in perm) "$ip (perm)" else "$ip (temp)"
         }
     }
 

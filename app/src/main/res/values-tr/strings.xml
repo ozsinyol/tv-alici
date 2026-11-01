@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Türkçe -->
+<resources>
+    <string name="approval_title">Bağlantı isteği</string>
+    <string name="approval_message">%1$s adresindeki cihaz TV\'ye bağlanmak istiyor.</string>
+    <string name="approval_once">İzin ver</string>
+    <string name="approval_always">Hep izin ver</string>
+    <string name="approval_deny">Reddet</string>
+    <string name="update_available_title">Güncelleme var</string>
+    <string name="update_available_message">Yeni sürüm: v%1$s (şu an v%2$s). İndirip kuralım mı?</string>
+    <string name="update_btn">Güncelle</string>
+    <string name="update_later">Sonra</string>
+    <string name="updating_title">Güncelleniyor</string>
+    <string name="downloading">İndiriliyor...</string>
+    <string name="downloading_percent">İndiriliyor... %%%1$s</string>
+    <string name="update_rejected">Güncelleme kurulmadı: %1$s</string>
+    <string name="download_failed">İndirme başarısız: %1$s</string>
+    <string name="install_screen_failed">Kurulum ekranı açılamadı: %1$s</string>
+    <string name="apk_unreadable">APK okunamadı</string>
+    <string name="pkg_mismatch">paket adı uyuşmuyor</string>
+    <string name="version_mismatch">sürüm numarası uyuşmuyor</string>
+    <string name="no_signature">imza bilgisi yok</string>
+    <string name="multiple_signers">birden fazla imzacı</string>
+    <string name="signature_failed">imza doğrulanamadı</string>
+    <string name="older_version">kurulu sürümden (v%1$s) eski (v%2$s)</string>
+    <string name="unknown_sources_toast">Önce bu uygulamaya \'bilinmeyen kaynaklardan yükleme\' izni verin, sonra güncellemeyi tekrar deneyin.</string>
+    <string name="unknown_sources_web">TV\'de bu uygulamaya \'bilinmeyen kaynaklardan yükleme\' izni verilmemiş; izin ekranı TV\'de açıldı. İzni verip APK\'yı tekrar gönderin.</string>
+    <string name="jitter_off">Görüntü tamponu: kapalı (OK = otomatik)</string>
+    <string name="jitter_manual">Görüntü tamponu: %1$s ms, elle (OK = otomatik; ses de aynı kadar gecikir)</string>
+    <string name="jitter_auto">Görüntü tamponu: otomatik (şu an %1$s ms)</string>
+    <string name="sync_video_late">Ses/görüntü: görüntü %1$s ms gecikiyor</string>
+    <string name="sync_audio_late">Ses/görüntü: ses %1$s ms gecikiyor</string>
+    <string name="sync_none">Ses/görüntü: ayar yok (0 ms)</string>
+    <string name="autostart_toast">Açılışta otomatik başlat: %1$s</string>
+    <string name="on">açık</string>
+    <string name="off">kapalı</string>
+    <string name="qr_hint">iPhone kamerasıyla QR\'ı okutun\nAdres: %1$s   PIN: %2$s\nAirPlay adı: %3$s</string>
+    <string name="autostart_hint">Açılışta başlat: %1$s (MENU ya da OK\'a bas)</string>
+</resources>

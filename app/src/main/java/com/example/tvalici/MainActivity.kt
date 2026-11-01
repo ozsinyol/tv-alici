@@ -408,7 +408,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         runOnUiThread { updater.install(file) }
         if (needsPermission) {
             appendLog("APK kurulumu için 'bilinmeyen kaynaklar' izni gerekli")
-            return "TV'de bu uygulamaya 'bilinmeyen kaynaklardan yükleme' izni verilmemiş; izin ekranı TV'de açıldı. İzni verip APK'yı tekrar gönderin."
+            return getString(R.string.unknown_sources_web)
         }
         appendLog("APK alındı, kurulum ekranı açılıyor")
         return null
@@ -418,11 +418,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         var dialog: androidx.appcompat.app.AlertDialog? = null
         runOnUiThread {
             dialog = androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Bağlantı isteği")
-                .setMessage("$ip adresindeki cihaz TV'ye bağlanmak istiyor.")
-                .setPositiveButton("İzin ver") { _, _ -> answer(Approvals.Result.ONCE) }
-                .setNeutralButton("Hep izin ver") { _, _ -> answer(Approvals.Result.ALWAYS) }
-                .setNegativeButton("Reddet") { _, _ -> answer(Approvals.Result.DENY) }
+                .setTitle(getString(R.string.approval_title))
+                .setMessage(getString(R.string.approval_message, ip))
+                .setPositiveButton(getString(R.string.approval_once)) { _, _ -> answer(Approvals.Result.ONCE) }
+                .setNeutralButton(getString(R.string.approval_always)) { _, _ -> answer(Approvals.Result.ALWAYS) }
+                .setNegativeButton(getString(R.string.approval_deny)) { _, _ -> answer(Approvals.Result.DENY) }
                 .setOnCancelListener { answer(Approvals.Result.DENY) }
                 .show()
         }
@@ -495,8 +495,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             val v = (SyncSettings.effectiveJitterMs + step).coerceIn(0, SyncSettings.MAX_JITTER_MS)
             SyncSettings.jitterBufferMs = v
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", v).apply()
-            val text = if (v == 0) "Görüntü tamponu: kapalı (OK = otomatik)"
-            else "Görüntü tamponu: $v ms, elle (OK = otomatik; ses de aynı kadar gecikir)"
+            val text = if (v == 0) getString(R.string.jitter_off)
+            else getString(R.string.jitter_manual, v.toString())
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
@@ -504,7 +504,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         if (mirrorActive && isOkKey(keyCode)) {
             SyncSettings.jitterBufferMs = SyncSettings.AUTO
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
-            val text = "Görüntü tamponu: otomatik (şu an ${SyncSettings.autoJitterMs} ms)"
+            val text = getString(R.string.jitter_auto, SyncSettings.autoJitterMs.toString())
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
@@ -515,9 +515,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             SyncSettings.offsetMs = v
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("syncOffsetMs", v).apply()
             val text = when {
-                v > 0 -> "Ses/görüntü: görüntü $v ms gecikiyor"
-                v < 0 -> "Ses/görüntü: ses ${-v} ms gecikiyor"
-                else -> "Ses/görüntü: ayar yok (0 ms)"
+                v > 0 -> getString(R.string.sync_video_late, v.toString())
+                v < 0 -> getString(R.string.sync_audio_late, (-v).toString())
+                else -> getString(R.string.sync_none)
             }
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -543,11 +543,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val on = !autostartOn()
         getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("autostart", on).apply()
         updateAutostartHint()
-        Toast.makeText(this, "Açılışta otomatik başlat: " + if (on) "açık" else "kapalı", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.autostart_toast, getString(if (on) R.string.on else R.string.off)), Toast.LENGTH_SHORT).show()
     }
 
     private fun baseLabelText(): String =
-        "iPhone kamerasıyla QR'ı okutun\nAdres: $serverUrl   PIN: $pin\nAirPlay adı: ${serverName()}"
+        getString(R.string.qr_hint, serverUrl, pin, serverName())
 
     override fun serverName(): String =
         getSharedPreferences("airplay", Context.MODE_PRIVATE).getString("serverName", null) ?: "TV Alici"
@@ -570,8 +570,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("autostart", false)
 
     private fun updateAutostartHint() {
-        infoLabel.text = baseLabel + "\nAçılışta başlat: " + (if (autostartOn()) "açık" else "kapalı") +
-            " (MENU ya da OK'a bas)"
+        infoLabel.text = baseLabel + "\n" + getString(R.string.autostart_hint, getString(if (autostartOn()) R.string.on else R.string.off))
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */

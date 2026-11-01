@@ -54,6 +54,10 @@ class VideoServer(
     private val tooMany = status(429, "Too Many Requests")
     private val found = status(302, "Found")
 
+    /** Tarayicinin Accept-Language basligina gore Turkce ya da Ingilizce metin secer. */
+    private fun L(session: IHTTPSession, tr: String, en: String): String =
+        if ((session.headers["accept-language"] ?: "").trim().lowercase().startsWith("tr")) tr else en
+
     override fun serve(session: IHTTPSession): Response {
         val path = session.uri
         val get = session.method == Method.GET
@@ -75,7 +79,7 @@ class VideoServer(
                 r.addHeader("Cache-Control", "no-store")
                 r
             }
-            else -> text("Sayfa yok", Response.Status.NOT_FOUND)
+            else -> text(L(session, "Sayfa yok", "Page not found"), Response.Status.NOT_FOUND)
         }
     }
 
@@ -87,7 +91,7 @@ class VideoServer(
         val f = failures.getOrPut(ip) { Fail() }
         if (f.lockedUntil > now) {
             val sec = (f.lockedUntil - now) / 1000 + 1
-            return text("Çok fazla yanlış deneme. $sec sn sonra tekrar deneyin.", tooMany)
+            return text(L(session, "Çok fazla yanlış deneme. $sec sn sonra tekrar deneyin.", "Too many wrong attempts. Try again in $sec s."), tooMany)
         }
         if (supplied != null &&
             MessageDigest.isEqual(supplied.toByteArray(Charsets.UTF_8), pin.toByteArray(Charsets.UTF_8))
@@ -100,7 +104,7 @@ class VideoServer(
             f.lockedUntil = now + LOCK_MS
             f.count = 0
         }
-        return text("PIN yanlış", Response.Status.UNAUTHORIZED)
+        return text(L(session, "PIN yanlış", "Wrong PIN"), Response.Status.UNAUTHORIZED)
     }
 
     private fun redirect(to: String): Response {
@@ -117,9 +121,9 @@ class VideoServer(
     private fun handleName(session: IHTTPSession): Response {
         authFail(session, session.headers["x-pin"])?.let { return it }
         if (session.method == Method.POST) {
-            val wanted = session.parms["set"] ?: return text("Ad yok", Response.Status.BAD_REQUEST)
+            val wanted = session.parms["set"] ?: return text(L(session, "Ad yok", "No name"), Response.Status.BAD_REQUEST)
             return if (names.setServerName(wanted)) text("OK")
-            else text("Geçersiz ad (1-32 karakter; @ ve kontrol karakterleri olmaz).", Response.Status.BAD_REQUEST)
+            else text(L(session, "Geçersiz ad (1-32 karakter; @ ve kontrol karakterleri olmaz).", "Invalid name (1-32 characters; no @ or control characters)."), Response.Status.BAD_REQUEST)
         }
         return text(names.serverName())
     }
@@ -147,7 +151,7 @@ class VideoServer(
             return r
         }
         val length = session.headers["content-length"]?.toLongOrNull()
-            ?: return text("Boyut bilgisi yok", Response.Status.BAD_REQUEST)
+            ?: return text(L(session, "Boyut bilgisi yok", "No size information"), Response.Status.BAD_REQUEST)
 
         // Onceki yuklemeleri temizle (onbellek dolmasin).
         dir.listFiles()?.forEach { f ->
@@ -166,7 +170,7 @@ class VideoServer(
                 while (total < length) {
                     val want = minOf(buf.size.toLong(), length - total).toInt()
                     val n = input.read(buf, 0, want)
-                    if (n < 0) throw IOException("Bağlantı koptu")
+                    if (n < 0) throw IOException("Connection lost")
                     out.write(buf, 0, n)
                     total += n
                     upload.update(total)
@@ -176,7 +180,7 @@ class VideoServer(
             text("OK")
         } catch (e: Exception) {
             upload.finish(false)
-            val r = text("Hata: ${e.message}", Response.Status.INTERNAL_ERROR)
+            val r = text(L(session, "Hata: ${e.message}", "Error: ${e.message}"), Response.Status.INTERNAL_ERROR)
             r.closeConnection(true)
             r
         }
@@ -188,9 +192,9 @@ class VideoServer(
             return r
         }
         val length = session.headers["content-length"]?.toLongOrNull()
-            ?: return text("Boyut bilgisi yok", Response.Status.BAD_REQUEST)
+            ?: return text(L(session, "Boyut bilgisi yok", "No size information"), Response.Status.BAD_REQUEST)
         if (length <= 0 || length > MAX_APK) {
-            val r = text("APK boyutu geçersiz (en fazla ${MAX_APK / (1024 * 1024)} MB).", Response.Status.BAD_REQUEST)
+            val r = text(L(session, "APK boyutu geçersiz (en fazla ${MAX_APK / (1024 * 1024)} MB).", "Invalid APK size (max ${MAX_APK / (1024 * 1024)} MB)."), Response.Status.BAD_REQUEST)
             r.closeConnection(true)
             return r
         }
@@ -207,7 +211,7 @@ class VideoServer(
                 while (total < length) {
                     val want = minOf(buf.size.toLong(), length - total).toInt()
                     val n = input.read(buf, 0, want)
-                    if (n < 0) throw IOException("Bağlantı koptu")
+                    if (n < 0) throw IOException("Connection lost")
                     out.write(buf, 0, n)
                     total += n
                 }
@@ -215,13 +219,13 @@ class VideoServer(
             val problem = onApk(dest)
             if (problem != null) {
                 dest.delete()
-                text("APK kurulmadı: $problem", Response.Status.BAD_REQUEST)
+                text(L(session, "APK kurulmadı: $problem", "APK not installed: $problem"), Response.Status.BAD_REQUEST)
             } else {
                 text("OK")
             }
         } catch (e: Exception) {
             dest.delete()
-            val r = text("Hata: ${e.message}", Response.Status.INTERNAL_ERROR)
+            val r = text(L(session, "Hata: ${e.message}", "Error: ${e.message}"), Response.Status.INTERNAL_ERROR)
             r.closeConnection(true)
             r
         }
@@ -240,7 +244,7 @@ class VideoServer(
 
         private const val PAGE = """
 <!doctype html>
-<html lang="tr"><head>
+<html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
@@ -276,53 +280,96 @@ class VideoServer(
   <div id="durum" role="status"></div>
 
   <nav class="sekmeler" role="tablist">
-    <button type="button" data-sekme="gonder">Gönder</button>
-    <button type="button" data-sekme="ayar">Ayarlar</button>
-    <button type="button" data-sekme="guncelle">Güncelle</button>
-    <button type="button" data-sekme="gunluk">Günlük</button>
+    <button type="button" data-sekme="gonder" data-i="tab_send"></button>
+    <button type="button" data-sekme="ayar" data-i="tab_settings"></button>
+    <button type="button" data-sekme="guncelle" data-i="tab_update"></button>
+    <button type="button" data-sekme="gunluk" data-i="tab_log"></button>
   </nav>
 
   <section id="gonder">
-    <h2>TV'ye gönder</h2>
+    <h2 data-i="h_send"></h2>
     <input type="file" id="dosya" accept="video/*"><br>
-    <button id="btn">Gönder</button>
+    <button id="btn" data-i="btn_send"></button>
     <progress id="ilerleme" value="0" max="100" hidden></progress>
-    <h2>Kumanda</h2>
+    <h2 data-i="h_remote"></h2>
     <div>
-      <button class="gri" data-cmd="back10">⏪ 10 sn</button>
-      <button data-cmd="playpause">⏯ Oynat / Duraklat</button>
-      <button class="gri" data-cmd="fwd10">10 sn ⏩</button>
+      <button class="gri" data-cmd="back10" data-i="c_back"></button>
+      <button data-cmd="playpause" data-i="c_play"></button>
+      <button class="gri" data-cmd="fwd10" data-i="c_fwd"></button>
     </div>
     <div>
-      <button class="gri" data-cmd="voldown">Ses −</button>
-      <button class="gri" data-cmd="volup">Ses +</button>
-      <button class="gri" data-cmd="stop">Durdur</button>
+      <button class="gri" data-cmd="voldown" data-i="c_voldown"></button>
+      <button class="gri" data-cmd="volup" data-i="c_volup"></button>
+      <button class="gri" data-cmd="stop" data-i="c_stop"></button>
     </div>
   </section>
 
   <section id="ayar">
-    <h2>AirPlay sunucu adı</h2>
-    <div><input type="text" id="ad" maxlength="32"> <button id="adKaydet">Kaydet</button></div>
-    <h2>Güvenilen cihazlar</h2>
+    <h2 data-i="h_name"></h2>
+    <div><input type="text" id="ad" maxlength="32"> <button id="adKaydet" data-i="btn_save"></button></div>
+    <h2 data-i="h_trusted"></h2>
     <ul id="liste"></ul>
-    <button class="gri" id="hepsiniSil">Hepsini sil</button>
+    <button class="gri" id="hepsiniSil" data-i="btn_clear_all"></button>
   </section>
 
   <section id="guncelle">
-    <h2>Uygulamayı güncelle <span id="surum"></span></h2>
-    <p class="not">Uygulamanın release anahtarıyla imzalı APK'sını seç. Doğrulanırsa TV'de kurulum ekranı açılır, kumandayla onayla. Uygulama TV'de açık olmalı.</p>
+    <h2><span data-i="h_update"></span> <span id="surum"></span></h2>
+    <p class="not" data-i="note_update"></p>
     <input type="file" id="apk" accept=".apk,application/vnd.android.package-archive"><br>
-    <button id="apkGonder">APK gönder</button>
+    <button id="apkGonder" data-i="btn_apk"></button>
     <progress id="apkIlerleme" value="0" max="100" hidden></progress>
   </section>
 
   <section id="gunluk">
-    <h2>Günlük</h2>
-    <button class="gri" id="yenile">Yenile</button>
+    <h2 data-i="h_log"></h2>
+    <button class="gri" id="yenile" data-i="btn_refresh"></button>
     <pre id="gunlukMetin"></pre>
   </section>
 
 <script>
+var DIL = {
+  tr: {
+    tab_send: 'Gönder', tab_settings: 'Ayarlar', tab_update: 'Güncelle', tab_log: 'Günlük',
+    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda',
+    c_back: '⏪ 10 sn', c_play: '⏯ Oynat / Duraklat', c_fwd: '10 sn ⏩',
+    c_voldown: 'Ses −', c_volup: 'Ses +', c_stop: 'Durdur',
+    h_name: 'AirPlay sunucu adı', btn_save: 'Kaydet', h_trusted: 'Güvenilen cihazlar', btn_clear_all: 'Hepsini sil',
+    h_update: 'Uygulamayı güncelle',
+    note_update: "Uygulamanın release anahtarıyla imzalı APK'sını seç. Doğrulanırsa TV'de kurulum ekranı açılır, kumandayla onayla. Uygulama TV'de açık olmalı.",
+    btn_apk: 'APK gönder', h_log: 'Günlük', btn_refresh: 'Yenile', btn_delete: 'Sil',
+    m_conn: 'Bağlantı hatası.', m_err: 'Hata', m_badpin: 'PIN yanlış.', m_enterpin: 'Önce PIN gir.',
+    m_nodevice: 'Kayıtlı cihaz yok.', m_perm: 'kalıcı', m_temp: 'bu açılışta',
+    m_saved: 'Kaydedildi. iPhone listesi birkaç saniye içinde yenilenir.',
+    m_confirm_clear: 'Tüm güvenilen cihazlar silinsin mi?',
+    m_pick_apk: 'Önce bir APK seç.', m_confirm_apk: "Bu APK TV'ye gönderilip kurulum için hazırlansın mı?",
+    m_apk_ok: 'APK alındı ve doğrulandı. TV ekranındaki kurulum onayını verin.', m_sending_apk: 'APK gönderiliyor...',
+    m_uploaded: 'Yüklendi.', m_sending: 'Gönderiliyor, TV oynatmaya başlayabilir...', m_pick_video: 'Önce bir video seç.'
+  },
+  en: {
+    tab_send: 'Send', tab_settings: 'Settings', tab_update: 'Update', tab_log: 'Log',
+    h_send: 'Send to TV', btn_send: 'Send', h_remote: 'Remote',
+    c_back: '⏪ 10 s', c_play: '⏯ Play / Pause', c_fwd: '10 s ⏩',
+    c_voldown: 'Vol −', c_volup: 'Vol +', c_stop: 'Stop',
+    h_name: 'AirPlay server name', btn_save: 'Save', h_trusted: 'Trusted devices', btn_clear_all: 'Delete all',
+    h_update: 'Update the app',
+    note_update: 'Choose the APK signed with the same release key. If it checks out, the install screen opens on the TV; confirm with the remote. The app must be open on the TV.',
+    btn_apk: 'Send APK', h_log: 'Log', btn_refresh: 'Refresh', btn_delete: 'Delete',
+    m_conn: 'Connection error.', m_err: 'Error', m_badpin: 'Wrong PIN.', m_enterpin: 'Enter the PIN first.',
+    m_nodevice: 'No saved devices.', m_perm: 'permanent', m_temp: 'this session',
+    m_saved: 'Saved. The iPhone list refreshes in a few seconds.',
+    m_confirm_clear: 'Delete all trusted devices?',
+    m_pick_apk: 'Choose an APK first.', m_confirm_apk: 'Send this APK to the TV and prepare it for installation?',
+    m_apk_ok: 'APK received and verified. Confirm the install on the TV screen.', m_sending_apk: 'Sending APK...',
+    m_uploaded: 'Uploaded.', m_sending: 'Sending; the TV can start playing...', m_pick_video: 'Choose a video first.'
+  }
+};
+var lang = ((navigator.language || 'en').slice(0, 2).toLowerCase() === 'tr') ? 'tr' : 'en';
+function L10(k) { return DIL[lang][k] || DIL.en[k] || k; }
+(function () {
+  document.documentElement.lang = lang;
+  var els = document.querySelectorAll('[data-i]');
+  for (var n = 0; n < els.length; n++) els[n].textContent = L10(els[n].getAttribute('data-i'));
+})();
 var pinInput = document.getElementById('pin');
 var durum = document.getElementById('durum');
 var ilerleme = document.getElementById('ilerleme');
@@ -338,13 +385,13 @@ if (params.get('pin')) { try { sessionStorage.setItem('pin', pin()); } catch (e)
 
 function pin() { return pinInput.value.trim(); }
 function mesaj(t) { durum.textContent = t || ''; }
-function hata(e) { mesaj(e && e.name === 'TypeError' ? 'Bağlantı hatası.' : (e && e.message) || 'Hata.'); }
+function hata(e) { mesaj(e && e.name === 'TypeError' ? L10('m_conn') : (e && e.message) || L10('m_err')); }
 
 function api(yol, yontem) {
   return fetch(yol, { method: yontem || 'GET', headers: { 'X-Pin': pin() } }).then(function (r) {
     return r.text().then(function (t) {
-      if (r.status === 401) throw new Error('PIN yanlış.');
-      if (!r.ok) throw new Error(t || ('Hata ' + r.status));
+      if (r.status === 401) throw new Error(L10('m_badpin'));
+      if (!r.ok) throw new Error(t || (L10('m_err') + ' ' + r.status));
       return t;
     });
   });
@@ -352,7 +399,7 @@ function api(yol, yontem) {
 
 function hepsiniYukle() {
   mesaj('');
-  if (!pin()) { mesaj('Önce PIN gir.'); return; }
+  if (!pin()) { mesaj(L10('m_enterpin')); return; }
   ayarYukle();
   if (aktifSekme === 'gunluk') gunlukYukle();
 }
@@ -375,17 +422,17 @@ function listeYukle() {
     var satirlar = t.split('\n').filter(function (x) { return x.length > 0; });
     if (!satirlar.length) {
       var bos = document.createElement('li');
-      bos.textContent = 'Kayıtlı cihaz yok.';
+      bos.textContent = L10('m_nodevice');
       ul.appendChild(bos);
       return;
     }
     satirlar.forEach(function (x) {
       var li = document.createElement('li');
       var etiket = document.createElement('span');
-      etiket.textContent = x;
+      etiket.textContent = x.replace(/\((perm|temp)\)$/, function (m, k) { return '(' + L10(k === 'perm' ? 'm_perm' : 'm_temp') + ')'; });
       var sil = document.createElement('button');
       sil.className = 'gri';
-      sil.textContent = 'Sil';
+      sil.textContent = L10('btn_delete');
       sil.onclick = function () {
         api('/api/trusted?forget=' + encodeURIComponent(x.split(' ')[0]), 'POST').then(listeYukle).catch(hata);
       };
@@ -399,20 +446,20 @@ function listeYukle() {
 document.getElementById('adKaydet').onclick = function () {
   var yeni = document.getElementById('ad').value;
   api('/api/name?set=' + encodeURIComponent(yeni), 'POST')
-    .then(function () { mesaj('Kaydedildi. iPhone listesi birkaç saniye içinde yenilenir.'); })
+    .then(function () { mesaj(L10('m_saved')); })
     .catch(hata);
 };
 
 document.getElementById('hepsiniSil').onclick = function () {
-  if (!confirm('Tüm güvenilen cihazlar silinsin mi?')) return;
+  if (!confirm(L10('m_confirm_clear'))) return;
   api('/api/trusted?clear=1', 'POST').then(listeYukle).catch(hata);
 };
 
 document.getElementById('apkGonder').onclick = function () {
   var f = document.getElementById('apk').files[0];
-  if (!f) { mesaj('Önce bir APK seç.'); return; }
-  if (!pin()) { mesaj('Önce PIN gir.'); return; }
-  if (!confirm("Bu APK TV'ye gönderilip kurulum için hazırlansın mı?")) return;
+  if (!f) { mesaj(L10('m_pick_apk')); return; }
+  if (!pin()) { mesaj(L10('m_enterpin')); return; }
+  if (!confirm(L10('m_confirm_apk'))) return;
   var bar = document.getElementById('apkIlerleme');
   var xhr = new XMLHttpRequest();
   xhr.open('PUT', '/update-apk');
@@ -421,12 +468,12 @@ document.getElementById('apkGonder').onclick = function () {
     if (e.lengthComputable) { bar.hidden = false; bar.value = e.loaded / e.total * 100; }
   };
   xhr.onload = function () {
-    if (xhr.status === 200) mesaj('APK alındı ve doğrulandı. TV ekranındaki kurulum onayını verin.');
-    else if (xhr.status === 401) mesaj('PIN yanlış.');
-    else mesaj(xhr.responseText || ('Hata ' + xhr.status));
+    if (xhr.status === 200) mesaj(L10('m_apk_ok'));
+    else if (xhr.status === 401) mesaj(L10('m_badpin'));
+    else mesaj(xhr.responseText || (L10('m_err') + ' ' + xhr.status));
   };
-  xhr.onerror = function () { mesaj('Bağlantı hatası.'); };
-  mesaj('APK gönderiliyor...');
+  xhr.onerror = function () { mesaj(L10('m_conn')); };
+  mesaj(L10('m_sending_apk'));
   xhr.send(f);
 };
 
@@ -447,18 +494,18 @@ function baslat(f) {
     if (e.lengthComputable) { ilerleme.hidden = false; ilerleme.value = e.loaded / e.total * 100; }
   };
   xhr.onload = function () {
-    if (xhr.status === 200) mesaj('Yüklendi.');
-    else if (xhr.status === 401) mesaj('PIN yanlış.');
-    else mesaj(xhr.responseText || ('Hata ' + xhr.status));
+    if (xhr.status === 200) mesaj(L10('m_uploaded'));
+    else if (xhr.status === 401) mesaj(L10('m_badpin'));
+    else mesaj(xhr.responseText || (L10('m_err') + ' ' + xhr.status));
   };
-  xhr.onerror = function () { mesaj('Bağlantı hatası.'); };
-  mesaj('Gönderiliyor, TV oynatmaya başlayabilir...');
+  xhr.onerror = function () { mesaj(L10('m_conn')); };
+  mesaj(L10('m_sending'));
   xhr.send(f);
 }
 
 document.getElementById('btn').onclick = function () {
   var f = document.getElementById('dosya').files[0];
-  if (!f) { mesaj('Önce bir video seç.'); return; }
+  if (!f) { mesaj(L10('m_pick_video')); return; }
   api('/control?cmd=ping', 'POST').then(function () { baslat(f); }).catch(hata);
 };
 

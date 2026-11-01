@@ -65,17 +65,17 @@ class Updater(private val activity: AppCompatActivity) {
     private fun askUser(remote: Int, apkUrl: String) {
         if (activity.isFinishing) return
         AlertDialog.Builder(activity)
-            .setTitle("Güncelleme var")
-            .setMessage("Yeni sürüm: v$remote (şu an v${BuildConfig.VERSION_CODE}). İndirip kuralım mı?")
-            .setPositiveButton("Güncelle") { _, _ -> download(remote, apkUrl) }
-            .setNegativeButton("Sonra", null)
+            .setTitle(activity.getString(R.string.update_available_title))
+            .setMessage(activity.getString(R.string.update_available_message, remote.toString(), BuildConfig.VERSION_CODE.toString()))
+            .setPositiveButton(activity.getString(R.string.update_btn)) { _, _ -> download(remote, apkUrl) }
+            .setNegativeButton(activity.getString(R.string.update_later), null)
             .show()
     }
 
     private fun download(remote: Int, apkUrl: String) {
         val dialog = AlertDialog.Builder(activity)
-            .setTitle("Güncelleniyor")
-            .setMessage("İndiriliyor...")
+            .setTitle(activity.getString(R.string.updating_title))
+            .setMessage(activity.getString(R.string.downloading))
             .setCancelable(false)
             .create()
         dialog.show()
@@ -104,7 +104,7 @@ class Updater(private val activity: AppCompatActivity) {
                                 val percent = (done * 100 / total).toInt()
                                 if (percent != lastPercent && percent % 5 == 0) {
                                     lastPercent = percent
-                                    activity.runOnUiThread { dialog.setMessage("İndiriliyor... %$percent") }
+                                    activity.runOnUiThread { dialog.setMessage(activity.getString(R.string.downloading_percent, percent.toString())) }
                                 }
                             }
                         }
@@ -118,14 +118,14 @@ class Updater(private val activity: AppCompatActivity) {
                     } else {
                         file.delete()
                         Log.w(tag, "Guncelleme reddedildi: $problem")
-                        Toast.makeText(activity, "Güncelleme kurulmadı: $problem", Toast.LENGTH_LONG).show()
+                        Toast.makeText(activity, activity.getString(R.string.update_rejected, problem), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.w(tag, "Indirme basarisiz: ${e.message}")
                 activity.runOnUiThread {
                     dialog.dismiss()
-                    Toast.makeText(activity, "İndirme başarısız: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(activity, activity.getString(R.string.download_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -143,22 +143,22 @@ class Updater(private val activity: AppCompatActivity) {
         } else {
             PackageManager.GET_SIGNATURES
         }
-        val info = pm.getPackageArchiveInfo(file.path, flags) ?: return "APK okunamadı"
-        if (info.packageName != activity.packageName) return "paket adı uyuşmuyor"
+        val info = pm.getPackageArchiveInfo(file.path, flags) ?: return activity.getString(R.string.apk_unreadable)
+        if (info.packageName != activity.packageName) return activity.getString(R.string.pkg_mismatch)
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-        if (remote != null && code != remote.toLong()) return "sürüm numarası uyuşmuyor"
+        if (remote != null && code != remote.toLong()) return activity.getString(R.string.version_mismatch)
 
         val sigs = if (Build.VERSION.SDK_INT >= 28) {
-            val si = info.signingInfo ?: return "imza bilgisi yok"
-            if (si.hasMultipleSigners()) return "birden fazla imzacı"
+            val si = info.signingInfo ?: return activity.getString(R.string.no_signature)
+            if (si.hasMultipleSigners()) return activity.getString(R.string.multiple_signers)
             si.apkContentsSigners
         } else {
             info.signatures
         }
-        if (sigs == null || sigs.size != 1) return "imza bilgisi yok"
+        if (sigs == null || sigs.size != 1) return activity.getString(R.string.no_signature)
         val digest = MessageDigest.getInstance("SHA-256").digest(sigs[0].toByteArray())
         val hex = digest.joinToString("") { "%02x".format(it) }
-        if (!hex.equals(BuildConfig.UPDATE_CERT_SHA256, ignoreCase = true)) return "imza doğrulanamadı"
+        if (!hex.equals(BuildConfig.UPDATE_CERT_SHA256, ignoreCase = true)) return activity.getString(R.string.signature_failed)
         return null
     }
 
@@ -169,9 +169,9 @@ class Updater(private val activity: AppCompatActivity) {
     @Suppress("DEPRECATION")
     fun verifyUpload(file: File): String? {
         verify(file, null)?.let { return it }
-        val info = activity.packageManager.getPackageArchiveInfo(file.path, 0) ?: return "APK okunamadı"
+        val info = activity.packageManager.getPackageArchiveInfo(file.path, 0) ?: return activity.getString(R.string.apk_unreadable)
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-        if (code < BuildConfig.VERSION_CODE) return "kurulu sürümden (v${BuildConfig.VERSION_CODE}) eski (v$code)"
+        if (code < BuildConfig.VERSION_CODE) return activity.getString(R.string.older_version, BuildConfig.VERSION_CODE.toString(), code.toString())
         return null
     }
 
@@ -180,7 +180,7 @@ class Updater(private val activity: AppCompatActivity) {
         if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
             Toast.makeText(
                 activity,
-                "Önce bu uygulamaya 'bilinmeyen kaynaklardan yükleme' izni verin, sonra güncellemeyi tekrar deneyin.",
+                activity.getString(R.string.unknown_sources_toast),
                 Toast.LENGTH_LONG
             ).show()
             try {
@@ -201,7 +201,7 @@ class Updater(private val activity: AppCompatActivity) {
         try {
             activity.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(activity, "Kurulum ekranı açılamadı: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(activity, activity.getString(R.string.install_screen_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
         }
     }
 }
