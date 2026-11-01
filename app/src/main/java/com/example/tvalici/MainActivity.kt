@@ -501,13 +501,34 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_MENU && overlayView.visibility == android.view.View.VISIBLE) {
-            val on = !autostartOn()
-            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("autostart", on).apply()
-            updateAutostartHint()
-            Toast.makeText(this, "Açılışta otomatik başlat: " + if (on) "açık" else "kapalı", Toast.LENGTH_SHORT).show()
+            toggleAutostart()
+            return true
+        }
+        // MENU tusu olmayan kumandalar (ör. Mi TV Stick) icin: QR ekraninda OK'a basili tutmak.
+        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
+            overlayView.visibility == android.view.View.VISIBLE
+        ) {
+            event.startTracking()
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
+            overlayView.visibility == android.view.View.VISIBLE
+        ) {
+            toggleAutostart()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    private fun toggleAutostart() {
+        val on = !autostartOn()
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("autostart", on).apply()
+        updateAutostartHint()
+        Toast.makeText(this, "Açılışta otomatik başlat: " + if (on) "açık" else "kapalı", Toast.LENGTH_SHORT).show()
     }
 
     private fun baseLabelText(): String =
@@ -536,7 +557,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("autostart", false)
 
     private fun updateAutostartHint() {
-        infoLabel.text = baseLabel + "\nMENU: TV açılınca otomatik başlat: " + if (autostartOn()) "açık" else "kapalı"
+        infoLabel.text = baseLabel + "\nMENU ya da OK'a basılı tut: TV açılınca otomatik başlat: " + if (autostartOn()) "açık" else "kapalı"
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */

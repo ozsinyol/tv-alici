@@ -1,4 +1,4 @@
-# Android AirPlay Sunucusu (TV Alıcı)
+# AirPlay for Android
 
 Android cihazı (Android TV, telefon, tablet, Android kutu/ekran) iPhone'lar için bir **AirPlay sunucusu** yapan uygulama: iPhone'dan ekran yansıtma, video, fotoğraf ve (Safari'den, uygulama kurmadan) video yükleme.
 
@@ -52,7 +52,7 @@ Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/tr
 
 ## Açılışta otomatik başlatma
 
-Ana (QR) ekranındayken kumandanın **MENU** tuşu "TV açılınca otomatik başlat" ayarını açıp kapatır (varsayılan kapalı). Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > TV Alici > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
+Ana (QR) ekranındayken kumandanın **MENU** tuşu "TV açılınca otomatik başlat" ayarını açıp kapatır (varsayılan kapalı). MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) **OK tuşuna basılı tutmak** aynı işi yapar. Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
 
 ## Fotoğraf AirPlay (`/photo`)
 
@@ -63,6 +63,18 @@ Fotoğraflar'da bir fotoğrafı açıp Paylaş > AirPlay > "TV Alici" ile TV'ye 
 Fotoğraflar uygulamasında bir videoyu açıp AirPlay simgesinden "TV Alici"yı seçince video TV'ye gönderilir ve ExoPlayer ile oynatılır (düz MP4 ve HLS). iPhone'un oynat/duraklat/ileri-geri sar komutları desteklenir. Yalnızca `http(s)` adresleri oynatılır; `mlhls://` gibi FairPlay korumalı akışlar (ör. YouTube) desteklenmez. Ekran yansıtmadan farkı: görüntüyü TV kendisi indirip çözer, bu yüzden kalite daha iyi, iPhone pili daha az harcanır.
 
 AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proje kişisel/deneysel kullanım içindir.
+
+## Web arayüzü (port 8080)
+
+Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada olduğu tek bir sayfa açar; üstte PIN alanı, altında sırayla şu bölümler vardır:
+
+- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan).
+- **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
+- **Günlük:** Uygulama günlüğü (açılır bölüm; **Yenile** ile güncellenir).
+
+Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>` aynı sayfayı Ayarlar bölümünde açar, `/log?pin=<PIN>` düz metin günlüğü verir.
+
+Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
 
 ## Hata ayıklama
 
