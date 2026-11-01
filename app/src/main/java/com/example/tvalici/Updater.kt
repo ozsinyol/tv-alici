@@ -18,17 +18,17 @@ import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 /**
- * GitHub Releases uzerinden guncelleme kontrolu.
- * Surum etiketi "v<numara>" biciminde olmali (workflow bunu run numarasindan uretir)
- * ve APK'nin versionCode'u ayni numaradir.
- * Not: depo herkese acik (public) olmalidir, aksi halde API yanit vermez.
+ * Update check via GitHub Releases.
+ * The release tag must be in the form "v<number>" (the workflow generates it from the run number)
+ * and the APK's versionCode is the same number.
+ * Note: the repository must be public, otherwise the API does not respond.
  */
 class Updater(private val activity: AppCompatActivity) {
 
     private val repo = "ozsinyol/tv-alici"
     private val tag = "Updater"
 
-    /** manual = true: sonucu (en son surum / hata) ekranda bildirir; false: yalnizca yeni surum varsa sorar. */
+    /** manual = true: reports the result (latest version / error) on screen; false: asks only if there is a new version. */
     fun check(manual: Boolean = false) {
         fun say(res: Int, vararg args: Any) {
             if (manual) activity.runOnUiThread { Toast.makeText(activity, activity.getString(res, *args), Toast.LENGTH_LONG).show() }
@@ -42,7 +42,7 @@ class Updater(private val activity: AppCompatActivity) {
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
                 if (conn.responseCode != 200) {
-                    Log.w(tag, "Surum bilgisi alinamadi: HTTP ${conn.responseCode}")
+                    Log.w(tag, "Could not get the version information: HTTP ${conn.responseCode}")
                     say(R.string.update_check_failed)
                     return@thread
                 }
@@ -66,7 +66,7 @@ class Updater(private val activity: AppCompatActivity) {
                 val apkUrl = found ?: return@thread
                 activity.runOnUiThread { askUser(remote, apkUrl) }
             } catch (e: Exception) {
-                Log.w(tag, "Guncelleme kontrolu basarisiz: ${e.message}")
+                Log.w(tag, "Update check failed: ${e.message}")
                 say(R.string.update_check_failed)
             }
         }
@@ -127,12 +127,12 @@ class Updater(private val activity: AppCompatActivity) {
                         install(file)
                     } else {
                         file.delete()
-                        Log.w(tag, "Guncelleme reddedildi: $problem")
+                        Log.w(tag, "Update rejected: $problem")
                         Toast.makeText(activity, activity.getString(R.string.update_rejected, problem), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
-                Log.w(tag, "Indirme basarisiz: ${e.message}")
+                Log.w(tag, "Download failed: ${e.message}")
                 activity.runOnUiThread {
                     dialog.dismiss()
                     Toast.makeText(activity, activity.getString(R.string.download_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
@@ -142,8 +142,8 @@ class Updater(private val activity: AppCompatActivity) {
     }
 
     /**
-     * Indirilen APK'yi kurmadan once dogrular: paket adi, surum numarasi ve imza sertifikasinin
-     * SHA-256 parmak izi (BuildConfig.UPDATE_CERT_SHA256). Sorun yoksa null, varsa nedenini dondurur.
+     * Verifies the downloaded APK before installing it: package name, version number and the SHA-256
+     * fingerprint of the signing certificate (BuildConfig.UPDATE_CERT_SHA256). Returns null if there is no problem, otherwise the reason.
      */
     @Suppress("DEPRECATION")
     private fun verify(file: File, remote: Int?): String? {
@@ -173,8 +173,8 @@ class Updater(private val activity: AppCompatActivity) {
     }
 
     /**
-     * Web arayuzunden elle yuklenen APK icin: paket adi + imza parmak izi (otomatik guncellemeyle ayni),
-     * ayrica kurulu surumden eski olmamali. Sorun yoksa null, varsa nedenini dondurur.
+     * For an APK uploaded by hand from the web interface: package name + signing fingerprint (same as the automatic update),
+     * and it must not be older than the installed version. Returns null if there is no problem, otherwise the reason.
      */
     @Suppress("DEPRECATION")
     fun verifyUpload(file: File): String? {
@@ -185,7 +185,7 @@ class Updater(private val activity: AppCompatActivity) {
         return null
     }
 
-    /** Sistemin kurulum ekranini acar (ana is parcaciginda cagrilmali). */
+    /** Opens the system's install screen (must be called on the main thread). */
     fun install(file: File) {
         if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
             Toast.makeText(
@@ -200,7 +200,7 @@ class Updater(private val activity: AppCompatActivity) {
                 )
                 activity.startActivity(settings)
             } catch (e: Exception) {
-                Log.w(tag, "Izin ekrani acilamadi: ${e.message}")
+                Log.w(tag, "Could not open the permission screen: ${e.message}")
             }
             return
         }

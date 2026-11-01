@@ -8,9 +8,9 @@ import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 /**
- * AirPlay zamanlama (NTP benzeri) istemcisi. iPhone zamanlama sunucusudur; alici
- * duzenli olarak 32 baytlik istek yollar. Yanitlari su an kullanmiyoruz (goruntu gelir gelmez
- * cizilir), ama istek gondermek iPhone'un akisi surdurmesi icin guvenli taraftir.
+ * AirPlay timing (NTP-like) client. The iPhone is the timing server; the receiver
+ * regularly sends 32-byte requests. We do not use the replies right now (the picture is drawn
+ * as soon as it arrives), but sending requests is the safe side for keeping the iPhone's stream going.
  */
 class NtpClient(
     private val remote: InetAddress,
@@ -31,7 +31,7 @@ class NtpClient(
                 try {
                     socket.receive(DatagramPacket(buf, buf.size))
                     replies++
-                    if (replies == 1) log("NTP yanıtı alındı")
+                    if (replies == 1) log("NTP reply received")
                 } catch (e: Exception) {
                     break
                 }
@@ -46,7 +46,7 @@ class NtpClient(
                     req[1] = 0xd2.toByte()
                     req[3] = 0x07
                     val now = System.currentTimeMillis()
-                    val seconds = now / 1000 + 2_208_988_800L // 1900'den beri
+                    val seconds = now / 1000 + 2_208_988_800L // since 1900
                     val fraction = ((now % 1000) shl 32) / 1000
                     val bb = ByteBuffer.wrap(req)
                     bb.putInt(24, seconds.toInt())
@@ -57,7 +57,7 @@ class NtpClient(
                 } catch (e: InterruptedException) {
                     break
                 } catch (e: Exception) {
-                    if (running) log("NTP gönderme hatası: ${e.message}")
+                    if (running) log("NTP send error: ${e.message}")
                     break
                 }
             }
@@ -69,7 +69,7 @@ class NtpClient(
         try {
             socket.close()
         } catch (e: Exception) {
-            // onemsiz
+            // unimportant
         }
     }
 }

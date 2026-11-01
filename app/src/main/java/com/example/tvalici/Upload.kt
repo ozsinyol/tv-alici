@@ -15,8 +15,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * Devam eden bir video yuklemesi. Sunucu dosyayi yazdikca [update] cagirir,
- * oynatici [awaitBytes] ile yeni veri bekler. Boylece yukleme bitmeden oynatma baslayabilir.
+ * An upload of a video that is in progress. [update] is called as the server writes the file,
+ * and the player waits for new data with [awaitBytes]. This way playback can start before the upload finishes.
  */
 class Upload(val file: File, val totalSize: Long, val queued: Boolean = false, val name: String = "") {
     private val lock = ReentrantLock()
@@ -48,7 +48,7 @@ class Upload(val file: File, val totalSize: Long, val queued: Boolean = false, v
         }
     }
 
-    /** [position] sonrasinda en az 1 bayt hazir olana (ya da akis bitene) kadar bekler. */
+    /** Waits until at least 1 byte after [position] is ready (or the stream ends). */
     fun awaitBytes(position: Long): Long {
         lock.withLock {
             while (written <= position && !finished && !failed) {
@@ -60,9 +60,9 @@ class Upload(val file: File, val totalSize: Long, val queued: Boolean = false, v
 }
 
 /**
- * Buyuyen dosyayi okuyan ExoPlayer veri kaynagi. Toplam boyut baslangicta bilindigi icin
- * oynatici gerekirse ileri sarabilir (ornegin dosyanin sonundaki moov bilgisi icin); henuz
- * yazilmamis bir konuma istek gelirse veri gelene kadar bekler.
+ * An ExoPlayer data source that reads a growing file. Because the total size is known at the start,
+ * the player can seek ahead if needed (for example for the moov information at the end of the file); if a request
+ * arrives for a position that has not been written yet, it waits until the data arrives.
  */
 class GrowingFileDataSource(private val upload: Upload) : DataSource {
     private var raf: RandomAccessFile? = null
@@ -109,7 +109,7 @@ class GrowingFileDataSource(private val upload: Upload) : DataSource {
         try {
             raf?.close()
         } catch (e: IOException) {
-            // kapanirken hata onemsiz
+            // errors while closing are unimportant
         }
         raf = null
         currentUri = null

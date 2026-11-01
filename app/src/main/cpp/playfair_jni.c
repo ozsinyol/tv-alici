@@ -1,6 +1,6 @@
 /*
- * JNI koprusu: FairPlay yayin anahtarini cozer (playfair).
- * playfair/ klasoru UxPlay projesinden alinmistir (GNU GPL surum 3, bkz. playfair/LICENSE.md).
+ * JNI bridge: decrypts the FairPlay stream key (playfair).
+ * The playfair/ folder was taken from the UxPlay project (GNU GPL version 3, see playfair/LICENSE.md).
  */
 #include <jni.h>
 #include <string.h>
@@ -20,7 +20,7 @@ Java_com_example_tvalici_Playfair_decrypt(JNIEnv *env, jclass clazz, jbyteArray 
     (*env)->GetByteArrayRegion(env, keymsg, 0, 164, (jbyte *) msg);
     (*env)->GetByteArrayRegion(env, ekey, 0, 72, (jbyte *) key);
 
-    /* playfair mod olarak msg[12] (0..3) bekler; gecersizse baslatilmamis bellek okunur. */
+    /* playfair expects msg[12] (0..3) as the mode; if it is invalid, uninitialized memory is read. */
     if (msg[4] != 3 || msg[12] > 3) return NULL;
 
     playfair_decrypt(msg, key, out);

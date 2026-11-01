@@ -3,9 +3,9 @@ package com.example.tvalici
 import android.util.Log
 
 /**
- * FairPlay yayin anahtari cozucu (playfair, JNI).
- * Native kod src/main/cpp/playfair altindadir, UxPlay projesinden alinmistir
- * (GNU GPL surum 3, bkz. LICENSE ve playfair/LICENSE.md).
+ * FairPlay stream key decryptor (playfair, JNI).
+ * The native code is under src/main/cpp/playfair and was taken from the UxPlay project
+ * (GNU GPL version 3, see LICENSE and playfair/LICENSE.md).
  */
 object Playfair {
     private var loaded = false
@@ -17,16 +17,16 @@ object Playfair {
                 System.loadLibrary("playfair_jni")
                 loaded = true
             } catch (e: UnsatisfiedLinkError) {
-                Log.e("Playfair", "playfair_jni yuklenemedi: ${e.message}")
+                Log.e("Playfair", "could not load playfair_jni: ${e.message}")
             }
         }
         return loaded
     }
 
     /**
-     * @param keymsg /fp-setup 2. asamasinda gelen 164 baytlik mesaj
-     * @param ekey SETUP istegindeki 72 baytlik sifreli anahtar
-     * @return 16 baytlik cozulmus anahtar, hata olursa null
+     * @param keymsg the 164-byte message that arrives in /fp-setup stage 2
+     * @param ekey the 72-byte encrypted key in the SETUP request
+     * @return the 16-byte decrypted key, or null on failure
      */
     @JvmStatic
     external fun decrypt(keymsg: ByteArray, ekey: ByteArray): ByteArray?

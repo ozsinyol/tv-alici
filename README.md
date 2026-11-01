@@ -14,7 +14,7 @@ When it starts, the app shows a QR code. Scan it with the iPhone camera, pick a 
 
 The app UI and the web page (port 8080) follow the device/browser language: **English** (default), **Turkish**, Spanish, French, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese (Simplified) and Arabic (right-to-left); other languages fall back to English. This document is the main (English) documentation; the language links at the top lead to the complete Turkish documentation ([README.tr.md](README.tr.md)) and short summaries in the other languages.
 
-To add a language to the app, create `app/src/main/res/values-<code>/strings.xml` (copy `values/strings.xml`) and add a block for it in the `DIL` table in `VideoServer.kt`. The developer log stays in Turkish.
+To add a language to the app, create `app/src/main/res/values-<code>/strings.xml` (copy `values/strings.xml`) and add a block for it in the `DIL` table in `VideoServer.kt`. The developer log and the code comments are in English (only the Turkish UI strings and the Turkish documentation are in Turkish).
 
 ## Building the APK with GitHub Actions
 
@@ -53,7 +53,7 @@ In apps such as Music, Spotify and Podcasts on the iPhone, choose "TV Alici" fro
 
 If the audio is out of sync with the picture while mirroring, adjust it in the [TV menu](#tv-menu) or, while mirroring, with the **RIGHT/LEFT** keys (20 ms per press, at most ±500 ms). If the audio arrives **late** relative to the picture, press RIGHT (the picture is delayed); if it arrives **early**, press LEFT (the audio is delayed). The setting is saved; a short notice appears on screen and is written to the log.
 
-**Video buffer (Wi-Fi jitter):** Frames do not arrive over the network at even intervals; if they were drawn the moment they arrive, the picture would stutter. The buffer draws frames at even intervals based on the iPhone's timestamps. The default is **automatic**: the app measures the jitter of the last few seconds and sets the buffer itself between 40 and 160 ms (it grows immediately and shrinks slowly). For manual control, use the **UP/DOWN** keys while mirroring (20 ms steps, 0–200 ms; 0 is off); on the "Video buffer" row of the menu, **OK** returns to automatic. Because the buffer delays the picture, the audio is delayed by the same amount (so sync is preserved), but everything appears that much later. The `Titreme:` line in the log shows the jitter distribution and the number of frames that exceeded the buffer; the `Otomatik tampon:` line shows changes of the automatic setting.
+**Video buffer (Wi-Fi jitter):** Frames do not arrive over the network at even intervals; if they were drawn the moment they arrive, the picture would stutter. The buffer draws frames at even intervals based on the iPhone's timestamps. The default is **automatic**: the app measures the jitter of the last few seconds and sets the buffer itself between 40 and 160 ms (it grows immediately and shrinks slowly). For manual control, use the **UP/DOWN** keys while mirroring (20 ms steps, 0–200 ms; 0 is off); on the "Video buffer" row of the menu, **OK** returns to automatic. Because the buffer delays the picture, the audio is delayed by the same amount (so sync is preserved), but everything appears that much later. The `Jitter:` line in the log shows the jitter distribution and the number of frames that exceeded the buffer; the `Auto buffer:` line shows changes of the automatic setting.
 
 ## Changing the AirPlay name
 

@@ -1,8 +1,8 @@
 /*
- * JNI koprusu: ALAC (Apple Lossless) cozucu. alac/ klasoru Apple'in acik kaynak ALAC
- * kodudur (Apache License 2.0, bkz. alac/APPLE_LICENSE.txt). AirPlay'de Muzik gibi
- * uygulamalardan gelen ses ALAC ile sikistirilir; Android'in MediaCodec'i bunu guvenilir
- * sekilde cozmedigi icin kendi cozucumuz kullanilir.
+ * JNI bridge: the ALAC (Apple Lossless) decoder. The alac/ folder is Apple's open-source ALAC
+ * code (Apple Public Source License 2.0, see alac/APPLE_LICENSE.txt). Audio coming from apps such as
+ * Music over AirPlay is compressed with ALAC; since Android's MediaCodec does not decode it reliably,
+ * our own decoder is used.
  */
 #include <jni.h>
 #include <stdint.h>
@@ -10,7 +10,7 @@
 #include "alac/ALACDecoder.h"
 #include "alac/ALACBitUtilities.h"
 
-/* AirPlay'in sabit ALAC ayari: 352 ornek/kare, 16 bit, 2 kanal, 44100 Hz. */
+/* The fixed ALAC settings of AirPlay: 352 samples/frame, 16-bit, 2 channels, 44100 Hz. */
 static const uint8_t kAirPlayCookie[24] = {
     0x00, 0x00, 0x01, 0x60, /* frameLength = 352 */
     0x00,                   /* compatibleVersion */
@@ -39,7 +39,7 @@ Java_com_example_tvalici_AlacNative_nativeCreate(JNIEnv *env, jclass clazz)
     return (jlong)(intptr_t) d;
 }
 
-/* Bir kareyi cozer; out 16 bit little-endian araliksiz stereo. Donus: yazilan bayt, hata -1. */
+/* Decodes one frame; out is 16-bit little-endian interleaved stereo. Returns: bytes written, -1 on error. */
 JNIEXPORT jint JNICALL
 Java_com_example_tvalici_AlacNative_nativeDecode(JNIEnv *env, jclass clazz, jlong handle,
                                                   jbyteArray in, jint inLen, jbyteArray out)

@@ -1,13 +1,13 @@
 package com.example.tvalici
 
-/** Sarki bilgisi (AirPlay Muzik metadata'si). */
+/** Song information (AirPlay Music metadata). */
 class TrackInfo(val title: String?, val artist: String?, val album: String?)
 
-/** DMAP (application/x-dmap-tagged) cozucu: 4 B etiket + 4 B buyuk-endian uzunluk + deger. */
+/** DMAP (application/x-dmap-tagged) decoder: 4 B tag + 4 B big-endian length + value. */
 object DmapParser {
     private val containers = setOf("mlit", "mcon", "msrv", "mlcl", "cmst")
 
-    /** Bozuk/kesik veride bile istisna atmaz; bulduklarini dondurur. */
+    /** Does not throw even on corrupt/truncated data; returns what it found. */
     fun parse(data: ByteArray): TrackInfo {
         var title: String? = null
         var artist: String? = null
@@ -37,7 +37,7 @@ object DmapParser {
         try {
             walk(0, data.size, 0)
         } catch (e: Exception) {
-            // bozuk paket: eldekiyle yetin
+            // corrupt packet: make do with what we have
         }
         return TrackInfo(title?.takeIf { it.isNotBlank() }, artist?.takeIf { it.isNotBlank() }, album?.takeIf { it.isNotBlank() })
     }

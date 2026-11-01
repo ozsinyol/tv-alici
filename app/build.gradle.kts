@@ -1,4 +1,4 @@
-// app modulunun build.gradle.kts dosyasi
+// the app module's build.gradle.kts file
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,9 +7,9 @@ plugins {
 // Workflow, VERSION_CODE ortam degiskenine run numarasini verir; yerelde 1 kalir.
 val appVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
 
-// Imza anahtari yalnizca GitHub Secrets'ta durur; workflow KEYSTORE_PATH ve sifreleri ortama verir.
-// Yerel derlemede (anahtar yok) Android'in varsayilan debug anahtari kullanilir; bu APK
-// uygulama ici guncelleme dogrulamasindan gecmez.
+// The signing key lives only in GitHub Secrets; the workflow passes KEYSTORE_PATH and the passwords through the environment.
+// In a local build (no key), Android's default debug key is used; this APK
+// does not pass the in-app update verification.
 val keystorePath: String? = System.getenv("KEYSTORE_PATH")
 
 android {
@@ -23,10 +23,10 @@ android {
         versionCode = appVersionCode
         versionName = "0.$appVersionCode"
 
-        // Guncelleme APK'sinin imza sertifikasinin SHA-256 parmak izi (herkese acik bilgi).
+        // SHA-256 fingerprint of the update APK's signing certificate (public information).
         buildConfigField("String", "UPDATE_CERT_SHA256", "\"4ff3b66b76f949d1487218949edda4ece828282dcd2474ff3c4a7e3f06c58c57\"")
 
-        // playfair (FairPlay yayin anahtari cozucu) icin yerel kutuphane.
+        // native library for playfair (the FairPlay stream key decryptor).
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -58,12 +58,12 @@ android {
         getByName("debug") {
             if (keystorePath != null) signingConfig = signingConfigs.getByName("ci")
         }
-        // Yayinlanan APK: debuggable degil, native kod optimize. Debug ile AYNI anahtarla imzalanir
-        // (UPDATE_CERT_SHA256 degismez; cihazlardaki uygulama yerinde guncellenir). Anahtar yoksa
-        // (yerel derleme) Android'in varsayilan debug anahtari kullanilir ki APK kurulabilsin.
+        // The published APK: not debuggable, optimized native code. It is signed with the SAME key as debug
+        // (UPDATE_CERT_SHA256 does not change; the app on devices updates in place). If there is no key
+        // (local build), Android's default debug key is used so the APK can be installed.
         getByName("release") {
             signingConfig = if (keystorePath != null) signingConfigs.getByName("ci") else signingConfigs.getByName("debug")
-            isMinifyEnabled = false // R8 ayri bir adim; once cihazda dogrulanmali
+            isMinifyEnabled = false // R8 is a separate step; it must be verified on a device first
             isShrinkResources = false
         }
     }

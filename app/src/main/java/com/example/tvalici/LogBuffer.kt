@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Son satirlari bellekte tutar; TV ekraninda ve /log sayfasinda gosterilir. */
+/** Keeps the last lines in memory; shown on the /log page (not on the TV screen). */
 object LogBuffer {
     private const val MAX_LINES = 300
     private val lines = ArrayDeque<String>()
