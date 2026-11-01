@@ -64,6 +64,18 @@ Fotoğraflar uygulamasında bir videoyu açıp AirPlay simgesinden "TV Alici"yı
 
 AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proje kişisel/deneysel kullanım içindir.
 
+## Web arayüzü (port 8080)
+
+Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) tek sayfalık bir arayüz açar; üstte PIN alanı ve üç sekme vardır:
+
+- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan).
+- **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
+- **Günlük:** Uygulama günlüğü (**Yenile** ile güncellenir).
+
+Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>` Ayarlar sekmesini açar, `/log?pin=<PIN>` düz metin günlüğü verir.
+
+Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
+
 ## Hata ayıklama
 
 - Günlük TV ekranında gösterilmez, yalnızca web sayfasından okunur.
