@@ -220,6 +220,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             visibility = android.view.View.GONE
         }
         rootLayout = FrameLayout(this).apply {
+            // PlayerView/denetleyici gibi gorunumler odak alip orta (OK) tusunu yutmasin.
+            descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
             addView(playerView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(
                 mirrorView,
@@ -486,6 +488,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
@@ -498,7 +501,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
         }
-        if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+        if (mirrorActive && isOkKey(keyCode)) {
             SyncSettings.jitterBufferMs = SyncSettings.AUTO
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
             val text = "Görüntü tamponu: otomatik (şu an ${SyncSettings.autoJitterMs} ms)"
@@ -524,25 +527,17 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             toggleAutostart()
             return true
         }
-        // MENU tusu olmayan kumandalar (ör. Mi TV Stick) icin: QR ekraninda OK'a basili tutmak.
-        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
-            overlayView.visibility == android.view.View.VISIBLE
-        ) {
-            event.startTracking()
+        // MENU tusu olmayan kumandalar (ör. Mi TV Stick) icin: QR ekraninda OK'a basmak.
+        if (isOkKey(keyCode) && overlayView.visibility == android.view.View.VISIBLE) {
+            if (event.repeatCount == 0) toggleAutostart()
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
-            overlayView.visibility == android.view.View.VISIBLE
-        ) {
-            toggleAutostart()
-            return true
-        }
-        return super.onKeyLongPress(keyCode, event)
-    }
+    private fun isOkKey(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER ||
+            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A
 
     private fun toggleAutostart() {
         val on = !autostartOn()
@@ -576,7 +571,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     private fun updateAutostartHint() {
         infoLabel.text = baseLabel + "\nAçılışta başlat: " + (if (autostartOn()) "açık" else "kapalı") +
-            " (MENU ya da OK'a basılı tut)"
+            " (MENU ya da OK'a bas)"
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
