@@ -10,6 +10,8 @@ import java.security.MessageDigest
  * TV uzerinde calisan kucuk web sunucusu. Tek sayfalik arayuz (Gonder / Ayarlar / Gunluk).
  * GET  /                  -> arayuz sayfasi (?pin=XXXX ile PIN onceden dolar, #ayar #gunluk ile sekme secilir)
  * PUT  /upload            -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
+ * PUT  /update-apk        -> uygulamanin yeni APK'sini alir; dogrulanirsa TV'de kurulum ekrani acilir
+ * GET  /api/version       -> kurulu surum (v<numara>)
  * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop)
  * GET  /api/name          -> AirPlay'de gorunen sunucu adi;  POST /api/name?set=AD -> degistirir
  * GET  /api/trusted       -> guvenilen cihazlar (satir satir);  POST /api/trusted?forget=IP | ?clear=1
@@ -31,6 +33,8 @@ class VideoServer(
     private val pin: String,
     private val onUploadStart: (Upload) -> Unit,
     private val onControl: (String) -> Unit,
+    /** Yuklenen APK'yi dogrular, sorun yoksa kurulumu baslatir. Sorunu metin olarak dondurur (null = tamam). */
+    private val onApk: (File) -> String?,
     private val trust: TrustAdmin,
     private val names: NameAdmin
 ) : NanoHTTPD(port) {
@@ -56,6 +60,10 @@ class VideoServer(
         val post = session.method == Method.POST
         return when {
             path == "/upload" && session.method == Method.PUT -> handleUpload(session)
+            path == "/update-apk" && session.method == Method.PUT -> handleApkUpload(session)
+            path == "/api/version" && get -> {
+                authFail(session, session.headers["x-pin"]) ?: text("v${BuildConfig.VERSION_CODE}")
+            }
             path == "/control" && post -> handleControl(session)
             path == "/log" && get -> handleLog(session)
             path == "/api/name" && (get || post) -> handleName(session)
@@ -174,6 +182,51 @@ class VideoServer(
         }
     }
 
+    private fun handleApkUpload(session: IHTTPSession): Response {
+        authFail(session, session.headers["x-pin"])?.let { r ->
+            r.closeConnection(true)
+            return r
+        }
+        val length = session.headers["content-length"]?.toLongOrNull()
+            ?: return text("Boyut bilgisi yok", Response.Status.BAD_REQUEST)
+        if (length <= 0 || length > MAX_APK) {
+            val r = text("APK boyutu geçersiz (en fazla ${MAX_APK / (1024 * 1024)} MB).", Response.Status.BAD_REQUEST)
+            r.closeConnection(true)
+            return r
+        }
+        // FileProvider yalnizca cache/updates/ altini paylasir (file_paths.xml).
+        val updDir = File(dir, "updates")
+        updDir.mkdirs()
+        val dest = File(updDir, "update.apk")
+        dest.delete()
+        return try {
+            val input = session.inputStream
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            dest.outputStream().use { out ->
+                while (total < length) {
+                    val want = minOf(buf.size.toLong(), length - total).toInt()
+                    val n = input.read(buf, 0, want)
+                    if (n < 0) throw IOException("Bağlantı koptu")
+                    out.write(buf, 0, n)
+                    total += n
+                }
+            }
+            val problem = onApk(dest)
+            if (problem != null) {
+                dest.delete()
+                text("APK kurulmadı: $problem", Response.Status.BAD_REQUEST)
+            } else {
+                text("OK")
+            }
+        } catch (e: Exception) {
+            dest.delete()
+            val r = text("Hata: ${e.message}", Response.Status.INTERNAL_ERROR)
+            r.closeConnection(true)
+            r
+        }
+    }
+
     private fun text(msg: String, status: Response.IStatus = Response.Status.OK): Response {
         val r = newFixedLengthResponse(status, "text/plain; charset=utf-8", msg)
         r.addHeader("Cache-Control", "no-store")
@@ -183,6 +236,7 @@ class VideoServer(
     companion object {
         private const val MAX_TRIES = 5
         private const val LOCK_MS = 5 * 60 * 1000L
+        private const val MAX_APK = 150L * 1024 * 1024
 
         private const val PAGE = """
 <!doctype html>
@@ -205,6 +259,7 @@ class VideoServer(
   section{text-align:center;margin-bottom:8px}
   section>h2:first-child{margin-top:20px}
   details{text-align:center}
+  .not{color:#aaa;font-size:14px;margin:0 0 8px}
   summary{font-size:16px;color:#aaa;margin:28px 0 8px;cursor:pointer}
   progress{width:100%;height:14px;margin-top:20px}
   #durum{margin:10px 0;color:#ffd60a;min-height:1.3em;text-align:center}
@@ -241,6 +296,14 @@ class VideoServer(
     <h2>Güvenilen cihazlar</h2>
     <ul id="liste"></ul>
     <button class="gri" id="hepsiniSil">Hepsini sil</button>
+  </section>
+
+  <section id="guncelle">
+    <h2>Uygulamayı güncelle <span id="surum"></span></h2>
+    <p class="not">Uygulamanın release anahtarıyla imzalı APK'sını seç. Doğrulanırsa TV'de kurulum ekranı açılır, kumandayla onayla. Uygulama TV'de açık olmalı.</p>
+    <input type="file" id="apk" accept=".apk,application/vnd.android.package-archive"><br>
+    <button id="apkGonder">APK gönder</button>
+    <progress id="apkIlerleme" value="0" max="100" hidden></progress>
   </section>
 
   <details id="gunluk">
@@ -288,6 +351,9 @@ function ayarYukle() {
   // Yanlis PIN kilit sayacindan tek hak yesin: once ad, basariliysa liste.
   api('/api/name').then(function (t) {
     document.getElementById('ad').value = t;
+    return api('/api/version');
+  }).then(function (v) {
+    document.getElementById('surum').textContent = '(' + v + ')';
     listeYukle();
   }).catch(hata);
 }
@@ -330,6 +396,28 @@ document.getElementById('adKaydet').onclick = function () {
 document.getElementById('hepsiniSil').onclick = function () {
   if (!confirm('Tüm güvenilen cihazlar silinsin mi?')) return;
   api('/api/trusted?clear=1', 'POST').then(listeYukle).catch(hata);
+};
+
+document.getElementById('apkGonder').onclick = function () {
+  var f = document.getElementById('apk').files[0];
+  if (!f) { mesaj('Önce bir APK seç.'); return; }
+  if (!pin()) { mesaj('Önce PIN gir.'); return; }
+  if (!confirm("Bu APK TV'ye gönderilip kurulum için hazırlansın mı?")) return;
+  var bar = document.getElementById('apkIlerleme');
+  var xhr = new XMLHttpRequest();
+  xhr.open('PUT', '/update-apk');
+  xhr.setRequestHeader('X-Pin', pin());
+  xhr.upload.onprogress = function (e) {
+    if (e.lengthComputable) { bar.hidden = false; bar.value = e.loaded / e.total * 100; }
+  };
+  xhr.onload = function () {
+    if (xhr.status === 200) mesaj('APK alındı ve doğrulandı. TV ekranındaki kurulum onayını verin.');
+    else if (xhr.status === 401) mesaj('PIN yanlış.');
+    else mesaj(xhr.responseText || ('Hata ' + xhr.status));
+  };
+  xhr.onerror = function () { mesaj('Bağlantı hatası.'); };
+  mesaj('APK gönderiliyor...');
+  xhr.send(f);
 };
 
 function gunlukYukle() {

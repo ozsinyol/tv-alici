@@ -88,6 +88,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private val port = 8080
     private val airplayPort = 7000
 
+    private val updater: Updater by lazy { Updater(this) }
+
     private val approvals: Approvals by lazy {
         Approvals(
             getSharedPreferences("airplay", Context.MODE_PRIVATE),
@@ -235,6 +237,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 pin,
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
+                { file -> acceptApk(file) },
                 approvals,
                 this
             ).also { it.start() }
@@ -253,7 +256,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
 
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
-        Updater(this).check()
+        updater.check()
     }
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
@@ -392,6 +395,23 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Bilinmeyen bir cihaz baglanmak isteyince TV'de izin penceresi acar. */
+    /** Web arayuzunden yuklenen APK'yi dogrular; sorun yoksa kurulum ekranini acar. null = tamam. */
+    private fun acceptApk(file: java.io.File): String? {
+        val problem = updater.verifyUpload(file)
+        if (problem != null) {
+            appendLog("APK reddedildi: $problem")
+            return problem
+        }
+        val needsPermission = android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()
+        runOnUiThread { updater.install(file) }
+        if (needsPermission) {
+            appendLog("APK kurulumu için 'bilinmeyen kaynaklar' izni gerekli")
+            return "TV'de bu uygulamaya 'bilinmeyen kaynaklardan yükleme' izni verilmemiş; izin ekranı TV'de açıldı. İzni verip APK'yı tekrar gönderin."
+        }
+        appendLog("APK alındı, kurulum ekranı açılıyor")
+        return null
+    }
+
     private fun askApproval(ip: String, answer: (Approvals.Result) -> Unit): () -> Unit {
         var dialog: androidx.appcompat.app.AlertDialog? = null
         runOnUiThread {

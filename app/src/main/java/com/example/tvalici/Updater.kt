@@ -136,7 +136,7 @@ class Updater(private val activity: AppCompatActivity) {
      * SHA-256 parmak izi (BuildConfig.UPDATE_CERT_SHA256). Sorun yoksa null, varsa nedenini dondurur.
      */
     @Suppress("DEPRECATION")
-    private fun verify(file: File, remote: Int): String? {
+    private fun verify(file: File, remote: Int?): String? {
         val pm = activity.packageManager
         val flags = if (Build.VERSION.SDK_INT >= 28) {
             PackageManager.GET_SIGNING_CERTIFICATES
@@ -146,7 +146,7 @@ class Updater(private val activity: AppCompatActivity) {
         val info = pm.getPackageArchiveInfo(file.path, flags) ?: return "APK okunamadı"
         if (info.packageName != activity.packageName) return "paket adı uyuşmuyor"
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-        if (code != remote.toLong()) return "sürüm numarası uyuşmuyor"
+        if (remote != null && code != remote.toLong()) return "sürüm numarası uyuşmuyor"
 
         val sigs = if (Build.VERSION.SDK_INT >= 28) {
             val si = info.signingInfo ?: return "imza bilgisi yok"
@@ -162,7 +162,21 @@ class Updater(private val activity: AppCompatActivity) {
         return null
     }
 
-    private fun install(file: File) {
+    /**
+     * Web arayuzunden elle yuklenen APK icin: paket adi + imza parmak izi (otomatik guncellemeyle ayni),
+     * ayrica kurulu surumden eski olmamali. Sorun yoksa null, varsa nedenini dondurur.
+     */
+    @Suppress("DEPRECATION")
+    fun verifyUpload(file: File): String? {
+        verify(file, null)?.let { return it }
+        val info = activity.packageManager.getPackageArchiveInfo(file.path, 0) ?: return "APK okunamadı"
+        val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+        if (code < BuildConfig.VERSION_CODE) return "kurulu sürümden (v${BuildConfig.VERSION_CODE}) eski (v$code)"
+        return null
+    }
+
+    /** Sistemin kurulum ekranini acar (ana is parcaciginda cagrilmali). */
+    fun install(file: File) {
         if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
             Toast.makeText(
                 activity,

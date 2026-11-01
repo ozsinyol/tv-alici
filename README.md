@@ -70,11 +70,22 @@ Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada oldu
 
 - **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan).
 - **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
+- **Uygulamayı güncelle:** Release anahtarıyla imzalı APK'yı tarayıcıdan gönderme (aşağıya bakın).
 - **Günlük:** Uygulama günlüğü (açılır bölüm; **Yenile** ile güncellenir).
 
 Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>` aynı sayfayı Ayarlar bölümünde açar, `/log?pin=<PIN>` düz metin günlüğü verir.
 
 Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
+
+## Elle güncelleme (APK gönderme)
+
+İnternet ya da GitHub erişimi olmayan cihazlarda, web arayüzündeki **Uygulamayı güncelle** bölümünden APK gönderilebilir. Sayfa kurulu sürümü de gösterir (ör. `v33`).
+
+1. APK'yı seçip **APK gönder**'e basın (en fazla 150 MB).
+2. TV, otomatik güncellemeyle aynı kontrolü yapar: paket adı aynı olmalı, imza sertifikasının SHA-256 parmak izi `UPDATE_CERT_SHA256` ile eşleşmeli ve sürüm kurulu sürümden eski olmamalı. Reddedilirse nedeni sayfada yazar.
+3. Kontrol geçerse TV'de sistemin kurulum ekranı açılır; kumandayla onaylayın. Bu onay olmadan kurulum yapılmaz.
+
+Notlar: Uygulama TV'de açık (QR ekranında) olmalıdır. Uygulamaya "bilinmeyen kaynaklardan yükleme" izni verilmemişse TV'de izin ekranı açılır; izni verip APK'yı tekrar gönderin. Başka anahtarla imzalı (ör. yerel/debug) derlemeler reddedilir.
 
 ## Hata ayıklama
 
