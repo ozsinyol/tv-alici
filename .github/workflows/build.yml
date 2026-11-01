@@ -35,11 +35,11 @@ jobs:
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
           else
-            echo "::warning::KEYSTORE_B64 yok: APK varsayilan debug anahtariyla imzalanir, release yayinlanmaz."
+            echo "::warning::KEYSTORE_B64 yok: APK varsayilan debug anahtariyla imzalanir, GitHub Release yayinlanmaz."
           fi
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build release APK
+        run: gradle :app:assembleRelease --no-daemon
         env:
           VERSION_CODE: ${{ github.run_number }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -50,7 +50,7 @@ jobs:
         if: env.KEYSTORE_PATH != ''
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
-          APK_FP=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep "certificate SHA-256 digest" | head -1 | awk '{print $NF}' | tr 'A-F' 'a-f')
+          APK_FP=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep "certificate SHA-256 digest" | head -1 | awk '{print $NF}' | tr 'A-F' 'a-f')
           PIN=$(grep -o '[0-9a-f]\{64\}' app/build.gradle.kts | head -1)
           echo "APK imzasi : $APK_FP"
           echo "Uygulamadaki: $PIN"
@@ -59,10 +59,19 @@ jobs:
             exit 1
           fi
 
+      - name: APK debuggable olmadigini dogrula
+        run: |
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          if "$AAPT2" dump badging app/build/outputs/apk/release/app-release.apk | grep -q "application-debuggable"; then
+            echo "::error::Release APK debuggable; yayinlanmamali."
+            exit 1
+          fi
+          echo "APK debuggable degil."
+
       - uses: actions/upload-artifact@v4
         with:
-          name: tv-alici-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: tv-alici-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Publish release (uygulama ici guncelleme bunu okur)
@@ -70,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk tv-alici.apk
+          cp app/build/outputs/apk/release/app-release.apk tv-alici.apk
           gh release create "v${{ github.run_number }}" tv-alici.apk \
             --title "v${{ github.run_number }}" \
             --notes "Otomatik derleme: ${{ github.sha }}" \

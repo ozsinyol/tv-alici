@@ -21,8 +21,8 @@
 
 ## البدء السريع
 
-1. ابنِ ملف APK عبر GitHub Actions (ادفع إلى `main` ثم نزّل الملف الناتج `tv-alici-debug-apk`) أو نزّل ملف APK موقّعًا من [Releases](https://github.com/ozsinyol/tv-alici/releases).
-2. ثبّته على جهاز Android (`adb install app-debug.apk` أو افتح ملف APK على الهاتف/الجهاز اللوحي). يجب أن يكون الجهازان على شبكة Wi-Fi نفسها.
+1. ابنِ ملف APK عبر GitHub Actions (ادفع إلى `main` ثم نزّل الملف الناتج `tv-alici-apk`) أو نزّل ملف APK موقّعًا من [Releases](https://github.com/ozsinyol/tv-alici/releases).
+2. ثبّته على جهاز Android (`adb install app-release.apk` أو افتح ملف APK على الهاتف/الجهاز اللوحي). يجب أن يكون الجهازان على شبكة Wi-Fi نفسها.
 3. افتح التطبيق وامسح رمز QR بكاميرا iPhone، أو اختر «TV Alici» من AirPlay / عكس الشاشة.
 
 ## القيود

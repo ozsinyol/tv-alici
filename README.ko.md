@@ -19,8 +19,8 @@ Android 기기(Android TV, 휴대폰, 태블릿, 셋톱박스)를 iPhone과 iPad
 
 ## 빠른 시작
 
-1. GitHub Actions로 APK를 빌드하거나(`main`에 push한 뒤 `tv-alici-debug-apk` 아티팩트 다운로드) [Releases](https://github.com/ozsinyol/tv-alici/releases)에서 서명된 APK를 내려받으세요.
-2. Android 기기에 설치하세요(`adb install app-debug.apk` 또는 휴대폰/태블릿에서 APK 열기). 두 기기는 같은 Wi-Fi 네트워크에 있어야 합니다.
+1. GitHub Actions로 APK를 빌드하거나(`main`에 push한 뒤 `tv-alici-apk` 아티팩트 다운로드) [Releases](https://github.com/ozsinyol/tv-alici/releases)에서 서명된 APK를 내려받으세요.
+2. Android 기기에 설치하세요(`adb install app-release.apk` 또는 휴대폰/태블릿에서 APK 열기). 두 기기는 같은 Wi-Fi 네트워크에 있어야 합니다.
 3. 앱을 열고 iPhone 카메라로 QR 코드를 스캔하거나, AirPlay / 화면 미러링에서 “TV Alici”를 선택하세요.
 
 ## 제한 사항

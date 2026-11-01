@@ -12,6 +12,7 @@ class MirrorDecoder(
     private val onSize: (Int, Int) -> Unit,
     private val log: (String) -> Unit
 ) {
+    @Volatile
     private var codec: MediaCodec? = null
     private var currentSps: ByteArray? = null
     private var currentPps: ByteArray? = null

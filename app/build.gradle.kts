@@ -58,6 +58,14 @@ android {
         getByName("debug") {
             if (keystorePath != null) signingConfig = signingConfigs.getByName("ci")
         }
+        // Yayinlanan APK: debuggable degil, native kod optimize. Debug ile AYNI anahtarla imzalanir
+        // (UPDATE_CERT_SHA256 degismez; cihazlardaki uygulama yerinde guncellenir). Anahtar yoksa
+        // (yerel derleme) Android'in varsayilan debug anahtari kullanilir ki APK kurulabilsin.
+        getByName("release") {
+            signingConfig = if (keystorePath != null) signingConfigs.getByName("ci") else signingConfigs.getByName("debug")
+            isMinifyEnabled = false // R8 ayri bir adim; once cihazda dogrulanmali
+            isShrinkResources = false
+        }
     }
 
     compileOptions {
