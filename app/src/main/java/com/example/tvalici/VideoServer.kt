@@ -256,6 +256,9 @@ class VideoServer(
   #ad{width:60%}
   button{font-size:17px;padding:12px 18px;border:0;border-radius:12px;background:#0a84ff;color:#fff;margin:4px}
   button.gri{background:#3a3a3c}
+  .sekmeler{display:flex;gap:6px;margin:0 0 8px}
+  .sekmeler button{flex:1;margin:0;padding:10px 4px;font-size:15px;background:#2c2c2e;color:#ddd}
+  .sekmeler button.aktif{background:#0a84ff;color:#fff}
   section{text-align:center;margin-bottom:8px}
   section>h2:first-child{margin-top:20px}
   details{text-align:center}
@@ -271,6 +274,13 @@ class VideoServer(
   <h1>AirPlay for Android</h1>
   <div class="pin">PIN: <input type="text" id="pin" inputmode="numeric" maxlength="4" autocomplete="off"></div>
   <div id="durum" role="status"></div>
+
+  <nav class="sekmeler" role="tablist">
+    <button type="button" data-sekme="gonder">Gönder</button>
+    <button type="button" data-sekme="ayar">Ayarlar</button>
+    <button type="button" data-sekme="guncelle">Güncelle</button>
+    <button type="button" data-sekme="gunluk">Günlük</button>
+  </nav>
 
   <section id="gonder">
     <h2>TV'ye gönder</h2>
@@ -306,11 +316,11 @@ class VideoServer(
     <progress id="apkIlerleme" value="0" max="100" hidden></progress>
   </section>
 
-  <details id="gunluk">
-    <summary>Günlük</summary>
+  <section id="gunluk">
+    <h2>Günlük</h2>
     <button class="gri" id="yenile">Yenile</button>
     <pre id="gunlukMetin"></pre>
-  </details>
+  </section>
 
 <script>
 var pinInput = document.getElementById('pin');
@@ -344,7 +354,7 @@ function hepsiniYukle() {
   mesaj('');
   if (!pin()) { mesaj('Önce PIN gir.'); return; }
   ayarYukle();
-  if (document.getElementById('gunluk').open) gunlukYukle();
+  if (aktifSekme === 'gunluk') gunlukYukle();
 }
 
 function ayarYukle() {
@@ -428,7 +438,6 @@ function gunlukYukle() {
   }).catch(hata);
 }
 document.getElementById('yenile').onclick = gunlukYukle;
-document.getElementById('gunluk').ontoggle = function () { if (this.open && pin()) gunlukYukle(); };
 
 function baslat(f) {
   var xhr = new XMLHttpRequest();
@@ -460,7 +469,30 @@ for (var i = 0; i < dugmeler.length; i++) {
   };
 }
 
-if (location.hash === '#gunluk') document.getElementById('gunluk').open = true;
+var sekmeAdlari = ['gonder', 'ayar', 'guncelle', 'gunluk'];
+var aktifSekme = 'gonder';
+
+function sekmeAc(ad) {
+  if (sekmeAdlari.indexOf(ad) < 0) ad = 'gonder';
+  aktifSekme = ad;
+  for (var i = 0; i < sekmeAdlari.length; i++) {
+    document.getElementById(sekmeAdlari[i]).hidden = sekmeAdlari[i] !== ad;
+  }
+  var bs = document.querySelectorAll('button[data-sekme]');
+  for (var j = 0; j < bs.length; j++) {
+    bs[j].className = bs[j].getAttribute('data-sekme') === ad ? 'aktif' : '';
+  }
+  try { history.replaceState(null, '', location.pathname + location.search + '#' + ad); } catch (e) {}
+  if (ad === 'gunluk' && pin()) gunlukYukle();
+}
+
+var sekmeDugmeleri = document.querySelectorAll('button[data-sekme]');
+for (var k = 0; k < sekmeDugmeleri.length; k++) {
+  sekmeDugmeleri[k].onclick = function () { sekmeAc(this.getAttribute('data-sekme')); };
+}
+window.onhashchange = function () { sekmeAc(location.hash.slice(1)); };
+
+sekmeAc(location.hash.slice(1));
 hepsiniYukle();
 </script>
 </body></html>

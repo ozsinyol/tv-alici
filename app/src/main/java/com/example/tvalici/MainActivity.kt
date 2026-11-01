@@ -552,9 +552,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     private fun baseLabelText(): String =
-        "iPhone kamerasiyla QR'i okutun\n$serverUrl  PIN: $pin\n" +
-            "AirPlay adı: ${serverName()}  (değiştir: $serverUrl/name?pin=$pin)\n" +
-            "Günlük: $serverUrl/log?pin=$pin\nGüvenilen cihazlar: $serverUrl/trusted?pin=$pin"
+        "iPhone kamerasıyla QR'ı okutun\nAdres: $serverUrl   PIN: $pin\nAirPlay adı: ${serverName()}"
 
     override fun serverName(): String =
         getSharedPreferences("airplay", Context.MODE_PRIVATE).getString("serverName", null) ?: "TV Alici"
@@ -577,7 +575,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("autostart", false)
 
     private fun updateAutostartHint() {
-        infoLabel.text = baseLabel + "\nMENU ya da OK'a basılı tut: TV açılınca otomatik başlat: " + if (autostartOn()) "açık" else "kapalı"
+        infoLabel.text = baseLabel + "\nAçılışta başlat: " + (if (autostartOn()) "açık" else "kapalı") +
+            " (MENU ya da OK'a basılı tut)"
     }
 
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
