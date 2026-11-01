@@ -19,8 +19,8 @@
 
 ## 快速开始
 
-1. 用 GitHub Actions 构建 APK（推送到 `main`，然后下载 `tv-alici-debug-apk` 构建产物），或从 [Releases](https://github.com/ozsinyol/tv-alici/releases) 下载已签名的 APK。
-2. 安装到 Android 设备（`adb install app-debug.apk`，或在手机/平板上打开 APK）。两台设备必须在同一个 Wi-Fi 网络中。
+1. 用 GitHub Actions 构建 APK（推送到 `main`，然后下载 `tv-alici-apk` 构建产物），或从 [Releases](https://github.com/ozsinyol/tv-alici/releases) 下载已签名的 APK。
+2. 安装到 Android 设备（`adb install app-release.apk`，或在手机/平板上打开 APK）。两台设备必须在同一个 Wi-Fi 网络中。
 3. 打开应用，用 iPhone 相机扫描二维码，或在 AirPlay / 屏幕镜像中选择“TV Alici”。
 
 ## 限制

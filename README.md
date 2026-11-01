@@ -18,13 +18,13 @@ To add a language to the app, create `app/src/main/res/values-<code>/strings.xml
 
 1. Upload this folder to a GitHub repository (`main` branch).
 2. In the repository, the **Actions** tab > **Build APK** workflow runs automatically (or start it with **Run workflow**).
-3. When it finishes, download `tv-alici-debug-apk` under **Artifacts** on the run's page.
+3. When it finishes, download `tv-alici-apk` under **Artifacts** on the run's page.
 
 Pushes to `main` additionally publish a signed APK as a GitHub Release (see [Signing and update security](#signing-and-update-security)).
 
 ## Installing on a device
 
-- **Android TV:** enable Developer options and USB/network debugging, then run `adb connect <tv-ip>` and `adb install app-debug.apk`. Alternatively, put the APK on a USB drive and install it with a file manager on the TV.
+- **Android TV:** enable Developer options and USB/network debugging, then run `adb connect <tv-ip>` and `adb install app-release.apk`. Alternatively, put the APK on a USB drive and install it with a file manager on the TV.
 - **Android phone/tablet:** download the APK from the [Releases](https://github.com/ozsinyol/tv-alici/releases) page on the device and open it (grant the "install unknown apps" permission if asked), or use `adb install`. The app icon appears in the launcher.
 
 The iPhone and the Android device must be on the same Wi-Fi network.
@@ -35,7 +35,7 @@ The app works the same way on Android TV and other Android devices: QR screen, A
 
 ## Signing and update security
 
-The APK is signed only with a private key stored in GitHub Secrets (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); the key is not in the repository. Without the key, the workflow does not publish a release. Before installing, the in-app updater checks the downloaded APK's package name, version number and the SHA-256 fingerprint of the signing certificate (`UPDATE_CERT_SHA256` in `app/build.gradle.kts`); if anything does not match, the APK is deleted. If the key is changed, this fingerprint must be updated too, and the app on the TV must be uninstalled once and installed manually. Local (unsigned) builds do not pass update verification.
+The published APK is a release build (not debuggable, optimized native code) and is signed only with a private key stored in GitHub Secrets (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); the key is not in the repository. Without the key, the workflow does not publish a release. Before installing, the in-app updater checks the downloaded APK's package name, version number and the SHA-256 fingerprint of the signing certificate (`UPDATE_CERT_SHA256` in `app/build.gradle.kts`); if anything does not match, the APK is deleted. If the key is changed, this fingerprint must be updated too, and the app on the TV must be uninstalled once and installed manually. Local (unsigned) builds do not pass update verification.
 
 ## Screen mirroring (AirPlay) and license
 

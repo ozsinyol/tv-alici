@@ -19,8 +19,8 @@
 
 ## Быстрый старт
 
-1. Соберите APK через GitHub Actions (push в `main`, затем скачайте артефакт `tv-alici-debug-apk`) или скачайте подписанный APK в разделе [Releases](https://github.com/ozsinyol/tv-alici/releases).
-2. Установите его на Android-устройство (`adb install app-debug.apk` или откройте APK на телефоне/планшете). Оба устройства должны быть в одной сети Wi-Fi.
+1. Соберите APK через GitHub Actions (push в `main`, затем скачайте артефакт `tv-alici-apk`) или скачайте подписанный APK в разделе [Releases](https://github.com/ozsinyol/tv-alici/releases).
+2. Установите его на Android-устройство (`adb install app-release.apk` или откройте APK на телефоне/планшете). Оба устройства должны быть в одной сети Wi-Fi.
 3. Откройте приложение и отсканируйте QR-код камерой iPhone либо выберите «TV Alici» в AirPlay / Повтор экрана.
 
 ## Ограничения

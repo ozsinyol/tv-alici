@@ -16,12 +16,12 @@ Uygulama arayüzü ve web sayfası (8080) cihaz/tarayıcı diline uyar: **İngil
 
 1. Bu klasörü bir GitHub deposuna yükleyin (`main` dalı).
 2. Depoda **Actions** sekmesi > **Build APK** iş akışı otomatik çalışır (ya da **Run workflow** ile elle başlatın).
-3. İş bitince çalıştırmanın sayfasında **Artifacts** altından `tv-alici-debug-apk` dosyasını indirin.
+3. İş bitince çalıştırmanın sayfasında **Artifacts** altından `tv-alici-apk` dosyasını indirin.
 
 ## Cihaza kurma
 
 - **Android TV:** geliştirici seçeneklerini ve USB/ağ hata ayıklamayı açın, ardından:
-  `adb connect <tv-ip>` ve `adb install app-debug.apk`. Ya da APK'yı USB belleğe koyup TV'deki bir dosya yöneticisiyle kurun.
+  `adb connect <tv-ip>` ve `adb install app-release.apk`. Ya da APK'yı USB belleğe koyup TV'deki bir dosya yöneticisiyle kurun.
 - **Android telefon/tablet:** APK'yı [Releases](https://github.com/ozsinyol/tv-alici/releases) sayfasından cihazda indirip açın (gerekirse "bilinmeyen kaynaklardan yükleme" iznini verin) ya da `adb install` kullanın. Uygulama simgesi başlatıcıda görünür.
 
 iPhone ve Android cihaz aynı Wi-Fi ağında olmalı.
@@ -32,7 +32,7 @@ Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: 
 
 ## İmza ve güncelleme güvenliği
 
-APK, yalnızca GitHub Secrets'ta duran özel bir anahtarla imzalanır (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); anahtar depoda yoktur. Anahtar yoksa workflow release yayınlamaz. Uygulama içi güncelleme, indirilen APK'nın paket adını, sürüm numarasını ve imza sertifikasının SHA-256 parmak izini (`app/build.gradle.kts` içindeki `UPDATE_CERT_SHA256`) kurmadan önce kontrol eder; uyuşmazsa APK silinir. Anahtar değiştirilirse bu parmak izi de güncellenmeli ve TV'deki uygulama bir kez silinip elle kurulmalıdır. Yerel (anahtarsız) derlemeler güncelleme doğrulamasından geçmez.
+Yayınlanan APK bir release derlemesidir (debuggable değil, native kod optimize) ve yalnızca GitHub Secrets'ta duran özel bir anahtarla imzalanır (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); anahtar depoda yoktur. Anahtar yoksa workflow release yayınlamaz. Uygulama içi güncelleme, indirilen APK'nın paket adını, sürüm numarasını ve imza sertifikasının SHA-256 parmak izini (`app/build.gradle.kts` içindeki `UPDATE_CERT_SHA256`) kurmadan önce kontrol eder; uyuşmazsa APK silinir. Anahtar değiştirilirse bu parmak izi de güncellenmeli ve TV'deki uygulama bir kez silinip elle kurulmalıdır. Yerel (anahtarsız) derlemeler güncelleme doğrulamasından geçmez.
 
 ## Ekran yansıtma (AirPlay) ve lisans
 

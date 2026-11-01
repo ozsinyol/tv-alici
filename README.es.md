@@ -19,8 +19,8 @@ Al iniciarse, la app muestra un código QR. Escanéalo con la cámara del iPhone
 
 ## Inicio rápido
 
-1. Compila el APK con GitHub Actions (push a `main` y descarga el artefacto `tv-alici-debug-apk`) o descarga un APK firmado desde [Releases](https://github.com/ozsinyol/tv-alici/releases).
-2. Instálalo en el dispositivo Android (`adb install app-debug.apk`, o abre el APK en un teléfono/tableta). Ambos dispositivos deben estar en la misma red Wi-Fi.
+1. Compila el APK con GitHub Actions (push a `main` y descarga el artefacto `tv-alici-apk`) o descarga un APK firmado desde [Releases](https://github.com/ozsinyol/tv-alici/releases).
+2. Instálalo en el dispositivo Android (`adb install app-release.apk`, o abre el APK en un teléfono/tableta). Ambos dispositivos deben estar en la misma red Wi-Fi.
 3. Abre la app y escanea el código QR con la cámara del iPhone, o elige «TV Alici» en AirPlay / Duplicar pantalla.
 
 ## Limitaciones

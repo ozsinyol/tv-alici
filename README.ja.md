@@ -19,8 +19,8 @@ Androidデバイス（Android TV、スマートフォン、タブレット、セ
 
 ## クイックスタート
 
-1. GitHub ActionsでAPKをビルドする（`main`にpushし、`tv-alici-debug-apk`アーティファクトをダウンロード）か、[Releases](https://github.com/ozsinyol/tv-alici/releases)から署名済みAPKをダウンロードします。
-2. Androidデバイスにインストールします（`adb install app-debug.apk`、またはスマートフォン/タブレットでAPKを開く）。2台は同じWi-Fiネットワークに接続してください。
+1. GitHub ActionsでAPKをビルドする（`main`にpushし、`tv-alici-apk`アーティファクトをダウンロード）か、[Releases](https://github.com/ozsinyol/tv-alici/releases)から署名済みAPKをダウンロードします。
+2. Androidデバイスにインストールします（`adb install app-release.apk`、またはスマートフォン/タブレットでAPKを開く）。2台は同じWi-Fiネットワークに接続してください。
 3. アプリを開き、iPhoneのカメラでQRコードを読み取るか、AirPlay /「画面ミラーリング」で「TV Alici」を選びます。
 
 ## 制限事項

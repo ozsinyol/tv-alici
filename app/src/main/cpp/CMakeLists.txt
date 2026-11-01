@@ -10,7 +10,10 @@ add_library(playfair_jni SHARED
     playfair/sap_hash.c)
 
 # Eski C kodu: yeni clang surumlerinde hata sayilan eski tarz yapilari uyari yap.
+# -O0: bu eski kod yalnizca baglanti basinda bir kez calisir (hiz onemsiz) ve debug derlemede -O0 ile
+# dogrulandi; release'te de ayni kalsin ki optimizasyon tanimsiz davranislari acmasin.
 target_compile_options(playfair_jni PRIVATE
+    -O0
     -w
     -Wno-implicit-function-declaration
     -Wno-int-conversion
@@ -20,7 +23,7 @@ target_compile_options(playfair_jni PRIVATE
 target_link_libraries(playfair_jni PRIVATE m)
 
 # ALAC (Apple Lossless) cozucu: Muzik gibi uygulamalardan gelen AirPlay sesi icin.
-# Kaynak: Apple ALAC (Apache License 2.0), bkz. alac/APPLE_LICENSE.txt
+# Kaynak: Apple ALAC (Apple Public Source License 2.0), bkz. alac/APPLE_LICENSE.txt
 add_library(alac_jni SHARED
     alac_jni.cpp
     alac/ALACDecoder.cpp
