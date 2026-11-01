@@ -98,6 +98,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         )
     }
     private lateinit var photoView: ImageView
+    private lateinit var trackArt: ImageView
+    private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
     private var airplayInfoRef: AirPlayInfo? = null
     private var serverUrl = ""
@@ -187,6 +189,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        trackArt = ImageView(this).apply { visibility = android.view.View.GONE }
+        trackText = TextView(this).apply {
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 16, 0, 0)
+            visibility = android.view.View.GONE
+        }
         infoLabel = label
         baseLabel = label.text.toString()
         updateAutostartHint()
@@ -196,6 +206,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             setBackgroundColor(Color.BLACK)
             addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(trackArt, LinearLayout.LayoutParams(260, 260).apply { topMargin = 24 })
+            addView(trackText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
         mirrorView = SurfaceView(this).apply {
@@ -262,6 +274,36 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
+
+    override fun audioTrack(info: TrackInfo) {
+        runOnUiThread {
+            val text = listOfNotNull(info.title, info.artist, info.album).joinToString("\n")
+            trackText.text = text
+            trackText.visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+    }
+
+    override fun audioArt(image: ByteArray?) {
+        val bmp = image?.let { decodeScaled(it) }
+        runOnUiThread {
+            if (bmp == null) {
+                trackArt.setImageDrawable(null)
+                trackArt.visibility = android.view.View.GONE
+            } else {
+                trackArt.setImageBitmap(bmp)
+                trackArt.visibility = android.view.View.VISIBLE
+            }
+        }
+    }
+
+    override fun audioEnded() {
+        runOnUiThread {
+            trackText.text = ""
+            trackText.visibility = android.view.View.GONE
+            trackArt.setImageDrawable(null)
+            trackArt.visibility = android.view.View.GONE
+        }
+    }
 
     override fun videoPlay(url: String, startSeconds: Double, startFraction: Double) {
         runOnUiThread {
