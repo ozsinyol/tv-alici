@@ -45,4 +45,12 @@
     <string name="buffer_auto">自动 (%1$s ms)</string>
     <string name="buffer_off">关闭</string>
     <string name="menu_hint">◀ ▶ 更改 · OK 选择 · 返回 关闭</string>
+    <string name="menu_update">检查更新</string>
+    <string name="update_checking">正在检查更新…</string>
+    <string name="update_latest">已是最新版本 (v%1$s)</string>
+    <string name="update_check_failed">检查更新失败</string>
+    <string name="menu_sleep">睡眠定时器</string>
+    <string name="sleep_min">%1$s 分钟</string>
+    <string name="sleep_stopped">睡眠定时器：已停止播放</string>
+    <string name="menu_exit">退出应用</string>
 </resources>

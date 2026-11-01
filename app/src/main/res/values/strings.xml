@@ -45,4 +45,12 @@
     <string name="buffer_auto">Auto (%1$s ms)</string>
     <string name="buffer_off">Off</string>
     <string name="menu_hint">◀ ▶ change · OK select · BACK close</string>
+    <string name="menu_update">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_latest">You have the latest version (v%1$s)</string>
+    <string name="update_check_failed">Update check failed</string>
+    <string name="menu_sleep">Sleep timer</string>
+    <string name="sleep_min">%1$s min</string>
+    <string name="sleep_stopped">Sleep timer: playback stopped</string>
+    <string name="menu_exit">Quit app</string>
 </resources>

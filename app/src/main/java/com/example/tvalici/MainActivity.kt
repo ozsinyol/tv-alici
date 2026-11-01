@@ -30,6 +30,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -711,6 +712,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             isClickable = true // kutunun ici arkadaki "disari tikla = kapat" katmanina gitmesin
         }
     }
+    // Kucuk ekranlarda (yatay telefon) satirlar sigmazsa menu kaydirilir; secili satir gorunur tutulur.
+    private val menuScroll: ScrollView by lazy {
+        ScrollView(this).apply {
+            isFillViewport = false
+            isVerticalScrollBarEnabled = false
+            addView(menuBox, android.view.ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+    }
     private val menuLayer: FrameLayout by lazy {
         FrameLayout(this).apply {
             setBackgroundColor(Color.argb(170, 0, 0, 0))
@@ -718,7 +727,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             isClickable = true
             setOnClickListener { closeMenu() }
             addView(
-                menuBox,
+                menuScroll,
                 FrameLayout.LayoutParams(minOf(dp(560), resources.displayMetrics.widthPixels - dp(32)), WRAP_CONTENT, Gravity.CENTER)
             )
         }
@@ -747,6 +756,34 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         else -> "${SyncSettings.jitterBufferMs} ms"
     }
 
+    // Uyku zamanlayicisi: secilen sure sonunda oynatma/yansitma durdurulur (yalnizca bu oturumda gecerli).
+    private val sleepOptions = intArrayOf(0, 15, 30, 60, 90, 120)
+    private var sleepIndex = 0
+    private var sleepDeadline = 0L
+    private val sleepRunnable = Runnable {
+        sleepIndex = 0
+        sleepDeadline = 0L
+        appendLog("Uyku zamanlayıcısı doldu, oynatma durduruldu")
+        stopPlayback()
+        Toast.makeText(this, getString(R.string.sleep_stopped), Toast.LENGTH_LONG).show()
+    }
+
+    private fun setSleep(index: Int) {
+        sleepIndex = ((index % sleepOptions.size) + sleepOptions.size) % sleepOptions.size
+        mainHandler.removeCallbacks(sleepRunnable)
+        val min = sleepOptions[sleepIndex]
+        if (min > 0) {
+            sleepDeadline = SystemClock.elapsedRealtime() + min * 60_000L
+            mainHandler.postDelayed(sleepRunnable, min * 60_000L)
+        } else {
+            sleepDeadline = 0L
+        }
+    }
+
+    private fun sleepText(): String =
+        if (sleepDeadline == 0L) getString(R.string.buffer_off)
+        else getString(R.string.sleep_min, ((sleepDeadline - SystemClock.elapsedRealtime() + 59_999L) / 60_000L).toString())
+
     private fun menuItems(): List<MenuItem> {
         val step = SyncSettings.STEP_MS
         val list = mutableListOf<MenuItem>()
@@ -754,6 +791,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             R.string.menu_autostart,
             { getString(if (autostartOn()) R.string.on else R.string.off) },
             { toggleAutostart() }, { toggleAutostart() }
+        )
+        list += MenuItem(
+            R.string.menu_sleep,
+            { sleepText() },
+            { setSleep(sleepIndex - 1) }, { setSleep(sleepIndex + 1) },
+            { setSleep(0) }
         )
         list += MenuItem(
             R.string.menu_sync,
@@ -775,6 +818,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { setMirrorZoom(1f) }
             )
         }
+        list += MenuItem(
+            R.string.menu_update,
+            { "v${BuildConfig.VERSION_CODE}" },
+            { updater.check(manual = true) }, { updater.check(manual = true) }
+        )
+        list += MenuItem(R.string.menu_exit, { "" }, {}, {}, { finish() })
         list += MenuItem(R.string.menu_close, { "" }, {}, {}, { closeMenu() })
         return list
     }
@@ -824,6 +873,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 gravity = Gravity.END
             }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             menuBox.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            if (i == menuIndex) menuScroll.post { menuScroll.scrollTo(0, maxOf(0, row.top - dp(80))) }
         }
         menuBox.addView(TextView(this).apply {
             text = getString(R.string.menu_hint)
@@ -1201,6 +1251,26 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         infoLabel.text = baseLabel + "\n" + getString(R.string.autostart_hint, getString(if (autostartOn()) R.string.on else R.string.off))
     }
 
+    /** Her seyi durdurur ve QR ekranina doner (Geri tusu ve uyku zamanlayicisi kullanir). */
+    private fun stopPlayback() {
+        uploadQueue.clear()
+        player?.stop()
+        photoView.visibility = android.view.View.GONE
+        if (airplayVideoActive) endAirplayVideo()
+        airplayServer?.stopAllMirrors()
+        // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
+        mirrorActive = false
+        lastMirrorW = 0
+        lastMirrorH = 0
+        mirrorZoom = 1f
+        panX = 0f
+        panY = 0f
+        audioStreaming = false
+        abandonAudioFocus()
+        syncStreamLocks()
+        overlayView.visibility = android.view.View.VISIBLE
+    }
+
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
@@ -1209,21 +1279,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             return
         }
         if (overlayView.visibility == android.view.View.GONE) {
-            player?.stop()
-            photoView.visibility = android.view.View.GONE
-            if (airplayVideoActive) endAirplayVideo()
-            airplayServer?.stopAllMirrors()
-            // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
-            mirrorActive = false
-            lastMirrorW = 0
-            lastMirrorH = 0
-            mirrorZoom = 1f
-            panX = 0f
-            panY = 0f
-            audioStreaming = false
-            abandonAudioFocus()
-            syncStreamLocks()
-            overlayView.visibility = android.view.View.VISIBLE
+            stopPlayback()
         } else {
             super.onBackPressed()
         }

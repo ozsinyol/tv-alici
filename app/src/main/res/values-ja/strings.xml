@@ -45,4 +45,12 @@
     <string name="buffer_auto">自動 (%1$s ms)</string>
     <string name="buffer_off">オフ</string>
     <string name="menu_hint">◀ ▶ 変更 · OK 選択 · 戻る 閉じる</string>
+    <string name="menu_update">アップデートを確認</string>
+    <string name="update_checking">アップデートを確認中…</string>
+    <string name="update_latest">最新バージョンです (v%1$s)</string>
+    <string name="update_check_failed">アップデートの確認に失敗しました</string>
+    <string name="menu_sleep">スリープタイマー</string>
+    <string name="sleep_min">%1$s 分</string>
+    <string name="sleep_stopped">スリープタイマー：再生を停止しました</string>
+    <string name="menu_exit">アプリを終了</string>
 </resources>

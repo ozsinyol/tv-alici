@@ -45,4 +45,12 @@
     <string name="buffer_auto">Авто (%1$s мс)</string>
     <string name="buffer_off">Выкл.</string>
     <string name="menu_hint">◀ ▶ изменить · OK выбрать · НАЗАД закрыть</string>
+    <string name="menu_update">Проверить обновления</string>
+    <string name="update_checking">Проверка обновлений…</string>
+    <string name="update_latest">Установлена последняя версия (v%1$s)</string>
+    <string name="update_check_failed">Не удалось проверить обновления</string>
+    <string name="menu_sleep">Таймер сна</string>
+    <string name="sleep_min">%1$s мин</string>
+    <string name="sleep_stopped">Таймер сна: воспроизведение остановлено</string>
+    <string name="menu_exit">Выйти из приложения</string>
 </resources>

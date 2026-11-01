@@ -45,4 +45,12 @@
     <string name="buffer_auto">Auto (%1$s ms)</string>
     <string name="buffer_off">Disattivato</string>
     <string name="menu_hint">◀ ▶ cambia · OK scegli · INDIETRO chiudi</string>
+    <string name="menu_update">Controlla aggiornamenti</string>
+    <string name="update_checking">Controllo aggiornamenti…</string>
+    <string name="update_latest">Hai l\'ultima versione (v%1$s)</string>
+    <string name="update_check_failed">Controllo aggiornamenti non riuscito</string>
+    <string name="menu_sleep">Timer di spegnimento</string>
+    <string name="sleep_min">%1$s min</string>
+    <string name="sleep_stopped">Timer: riproduzione interrotta</string>
+    <string name="menu_exit">Esci dall\'app</string>
 </resources>

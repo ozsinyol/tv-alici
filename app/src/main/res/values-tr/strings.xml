@@ -45,4 +45,12 @@
     <string name="buffer_auto">Otomatik (%1$s ms)</string>
     <string name="buffer_off">Kapalı</string>
     <string name="menu_hint">◀ ▶ değiştir · OK seç · GERİ kapat</string>
+    <string name="menu_update">Güncellemeyi kontrol et</string>
+    <string name="update_checking">Güncelleme kontrol ediliyor…</string>
+    <string name="update_latest">En son sürüm kurulu (v%1$s)</string>
+    <string name="update_check_failed">Güncelleme kontrolü başarısız</string>
+    <string name="menu_sleep">Uyku zamanlayıcısı</string>
+    <string name="sleep_min">%1$s dk</string>
+    <string name="sleep_stopped">Uyku zamanlayıcısı: oynatma durduruldu</string>
+    <string name="menu_exit">Uygulamadan çık</string>
 </resources>

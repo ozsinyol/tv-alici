@@ -28,7 +28,12 @@ class Updater(private val activity: AppCompatActivity) {
     private val repo = "ozsinyol/tv-alici"
     private val tag = "Updater"
 
-    fun check() {
+    /** manual = true: sonucu (en son surum / hata) ekranda bildirir; false: yalnizca yeni surum varsa sorar. */
+    fun check(manual: Boolean = false) {
+        fun say(res: Int, vararg args: Any) {
+            if (manual) activity.runOnUiThread { Toast.makeText(activity, activity.getString(res, *args), Toast.LENGTH_LONG).show() }
+        }
+        say(R.string.update_checking)
         thread(name = "update-check", isDaemon = true) {
             try {
                 val conn = URL("https://api.github.com/repos/$repo/releases/latest")
@@ -38,12 +43,16 @@ class Updater(private val activity: AppCompatActivity) {
                 conn.readTimeout = 8000
                 if (conn.responseCode != 200) {
                     Log.w(tag, "Surum bilgisi alinamadi: HTTP ${conn.responseCode}")
+                    say(R.string.update_check_failed)
                     return@thread
                 }
                 val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
                 val remote = json.getString("tag_name").removePrefix("v").toIntOrNull()
                     ?: return@thread
-                if (remote <= BuildConfig.VERSION_CODE) return@thread
+                if (remote <= BuildConfig.VERSION_CODE) {
+                    say(R.string.update_latest, BuildConfig.VERSION_CODE.toString())
+                    return@thread
+                }
 
                 val assets = json.getJSONArray("assets")
                 var found: String? = null
@@ -58,6 +67,7 @@ class Updater(private val activity: AppCompatActivity) {
                 activity.runOnUiThread { askUser(remote, apkUrl) }
             } catch (e: Exception) {
                 Log.w(tag, "Guncelleme kontrolu basarisiz: ${e.message}")
+                say(R.string.update_check_failed)
             }
         }
     }

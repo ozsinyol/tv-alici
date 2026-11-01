@@ -45,4 +45,12 @@
     <string name="buffer_auto">Auto (%1$s ms)</string>
     <string name="buffer_off">Desactivado</string>
     <string name="menu_hint">◀ ▶ cambiar · OK elegir · ATRÁS cerrar</string>
+    <string name="menu_update">Buscar actualizaciones</string>
+    <string name="update_checking">Buscando actualizaciones…</string>
+    <string name="update_latest">Tienes la última versión (v%1$s)</string>
+    <string name="update_check_failed">Error al buscar actualizaciones</string>
+    <string name="menu_sleep">Temporizador de apagado</string>
+    <string name="sleep_min">%1$s min</string>
+    <string name="sleep_stopped">Temporizador: reproducción detenida</string>
+    <string name="menu_exit">Salir de la app</string>
 </resources>

@@ -45,4 +45,12 @@
     <string name="buffer_auto">تلقائي (%1$s ms)</string>
     <string name="buffer_off">إيقاف</string>
     <string name="menu_hint">◀ ▶ تغيير · OK اختيار · رجوع إغلاق</string>
+    <string name="menu_update">التحقق من التحديثات</string>
+    <string name="update_checking">جارٍ التحقق من التحديثات…</string>
+    <string name="update_latest">لديك أحدث إصدار (v%1$s)</string>
+    <string name="update_check_failed">فشل التحقق من التحديثات</string>
+    <string name="menu_sleep">مؤقت النوم</string>
+    <string name="sleep_min">%1$s د</string>
+    <string name="sleep_stopped">مؤقت النوم: تم إيقاف التشغيل</string>
+    <string name="menu_exit">إغلاق التطبيق</string>
 </resources>

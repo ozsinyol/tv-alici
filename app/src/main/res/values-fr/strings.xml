@@ -45,4 +45,12 @@
     <string name="buffer_auto">Auto (%1$s ms)</string>
     <string name="buffer_off">Désactivé</string>
     <string name="menu_hint">◀ ▶ modifier · OK choisir · RETOUR fermer</string>
+    <string name="menu_update">Rechercher les mises à jour</string>
+    <string name="update_checking">Recherche de mises à jour…</string>
+    <string name="update_latest">Vous avez la dernière version (v%1$s)</string>
+    <string name="update_check_failed">Échec de la recherche de mises à jour</string>
+    <string name="menu_sleep">Minuterie de veille</string>
+    <string name="sleep_min">%1$s min</string>
+    <string name="sleep_stopped">Minuterie : lecture arrêtée</string>
+    <string name="menu_exit">Quitter l\'application</string>
 </resources>

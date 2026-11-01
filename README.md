@@ -83,9 +83,12 @@ QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna
 | Satır | Değiştirme |
 |---|---|
 | Açılışta otomatik başlat | SOL/SAĞ/OK açıp kapatır |
+| Uyku zamanlayıcısı | SOL/SAĞ kapalı → 15 → 30 → 60 → 90 → 120 dk, OK kapatır; süre dolunca oynatma ve yansıtma durur, QR ekranına dönülür (yalnızca o oturumda geçerli) |
 | Ses/görüntü kayması | SOL/SAĞ ±20 ms, OK sıfırlar |
 | Görüntü tamponu | SOL/SAĞ ±20 ms (0 = kapalı), OK otomatiğe döner |
 | Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
+| Güncellemeyi kontrol et (kurulu sürüm yazar) | OK: GitHub'daki son sürümü sorar, sonucu ekranda gösterir |
+| Uygulamadan çık | OK (ön plan servisi ve sunucular da durur) |
 | Kapat | OK |
 
 Gezinme YUKARI/AŞAĞI ile yapılır. Dokunmatik ekranda satıra dokunmak "OK/artır", uzun basmak "azalt" işi görür. Menü kapalıyken yansıtma sırasındaki eski kısayollar sürer: SAĞ/SOL ses-görüntü kayması, YUKARI/AŞAĞI görüntü tamponu.
