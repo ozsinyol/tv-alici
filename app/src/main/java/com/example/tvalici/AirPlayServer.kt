@@ -47,6 +47,9 @@ interface VideoEvents {
     /** Muzik AirPlay: kapak resmi geldi; null kapagin kaldirildigini belirtir. */
     fun audioArt(image: ByteArray?) {}
 
+    /** Bir iPhone/iPad yayina baglandi (cihaz adi bilinmiyorsa null). */
+    fun deviceConnected(name: String?) {}
+
     /** Muzik AirPlay oturumu bitti; sarki bilgisi temizlenmeli. */
     fun audioEnded() {}
 }
@@ -629,6 +632,9 @@ class AirPlayServer(
             s.aesKey = aes
             s.aesIv = eiv.copyOf()
             log("  SETUP 1: yayın anahtarı hazır")
+            val devName = (root.objectForKey("name") as? NSString)?.content
+                ?.replace(Regex("[\\p{Cntrl}]"), " ")?.trim()?.take(40)?.takeIf { it.isNotEmpty() }
+            video.deviceConnected(devName)
 
             val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
             s.ntp?.stop()

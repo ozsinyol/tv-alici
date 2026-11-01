@@ -104,6 +104,17 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
     private lateinit var photoView: ImageView
     private lateinit var overlayContent: LinearLayout
+    private val sayView: TextView by lazy {
+        TextView(this).apply {
+            textSize = 64f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(200, 0, 0, 0))
+            setPadding(80, 80, 80, 80)
+            visibility = android.view.View.GONE
+        }
+    }
+    private val hideSay = Runnable { sayView.visibility = android.view.View.GONE }
     private lateinit var trackArt: ImageView
     private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
@@ -259,6 +270,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             )
             addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
 
@@ -269,6 +281,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 pin,
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
+                { text -> runOnUiThread { say(text) } },
                 { file -> acceptApk(file) },
                 approvals,
                 this
@@ -294,6 +307,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
+
+    override fun deviceConnected(name: String?) {
+        runOnUiThread {
+            Toast.makeText(this, "👋 " + (name ?: "iPhone"), Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun audioTrack(info: TrackInfo) {
         runOnUiThread {
@@ -492,6 +511,19 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    /** Web sayfasindan gelen mesaji ekranda 20 sn buyuk yazi olarak gosterir (bos metin kaldirir). */
+    private fun say(text: String) {
+        mainHandler.removeCallbacks(hideSay)
+        if (text.isEmpty()) {
+            sayView.visibility = android.view.View.GONE
+            return
+        }
+        sayView.text = text
+        sayView.visibility = android.view.View.VISIBLE
+        mainHandler.postDelayed(hideSay, 20_000L)
+        appendLog("Mesaj gösterildi")
+    }
+
     // ---- Bosta kalinca zıplayan QR (DVD logosu gibi; ekran yanmasini da onler) ---------------
 
     private var idleSince = SystemClock.elapsedRealtime()
