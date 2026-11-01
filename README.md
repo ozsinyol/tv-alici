@@ -26,7 +26,7 @@ iPhone ve Android cihaz aynı Wi-Fi ağında olmalı.
 
 ## Android telefon/tablette kullanım
 
-Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: QR ekranı, AirPlay sunucusu, bağlantı izni penceresi (dokunmayla seçilir), video, fotoğraf ve ekran yansıtma. Aşağıdaki kumanda tuşu ayarları (ses/görüntü kaydırma, görüntü tamponu, MENU ile otomatik başlatma) yön/OK/MENU tuşlarıyla yapılır; dokunmatik ekranda bu tuşlar yoktur, bunlar için Bluetooth klavye ya da uzaktan kumanda gerekir. Telefon/tablette cihazın kendi ekranı ve hoparlörü kullanılır, ekran yansıtma sırasında ekran kapanmaz.
+Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: QR ekranı, AirPlay sunucusu, bağlantı izni penceresi (dokunmayla seçilir), video, fotoğraf ve ekran yansıtma. Aşağıdaki kumanda tuşu ayarları (ses/görüntü kaydırma, görüntü tamponu, otomatik başlatma) yön/OK/MENU tuşlarıyla açılan **TV menüsünden** yapılır; menü satırlarına dokunarak da ayar yapılabilir (dokununca artır/seç, uzun basınca azalt). Telefon/tablette cihazın kendi ekranı ve hoparlörü kullanılır, ekran yansıtma sırasında ekran kapanmaz.
 
 ## İmza ve güncelleme güvenliği
 
@@ -46,7 +46,7 @@ iPhone'da Müzik, Spotify, Podcasts gibi uygulamalarda AirPlay simgesinden "TV A
 
 Ekran yansıtırken ses görüntüyle kayık geliyorsa TV kumandasında **SAĞ/SOL** tuşlarına basın (her basış 20 ms, en çok ±500 ms). Ses görüntüden **geç** geliyorsa SAĞ (görüntü geciktirilir), **erken** geliyorsa SOL (ses geciktirilir). Ayar kaydedilir; ekranda kısa bir bilgi çıkar ve günlüğe yazılır.
 
-**Görüntü tamponu (Wi-Fi titremesi):** Kareler ağdan eşit aralıkla gelmez; geldikleri anda çizilirse görüntü takılır. Tampon, kareleri iPhone'un zaman damgasına göre eşit aralıkla çizer. Varsayılan **otomatik**: uygulama son birkaç saniyenin titremesini ölçüp tamponu 40–160 ms arasında kendisi ayarlar (artış hemen, azalış yavaş). Elle ayar için yansıtma sırasında **YUKARI/AŞAĞI** tuşları (20 ms'lik adımlar, 0–200 ms; 0 kapalı), **OK** tuşu otomatiğe döner. Tampon görüntüyü geciktirdiği için ses de aynı kadar geciktirilir (senkron bozulmaz), ama her şey o kadar daha geç görünür. Günlükteki `Titreme:` satırı titremenin dağılımını ve tamponu aşan kare sayısını, `Otomatik tampon:` satırı ayar değişimlerini gösterir.
+**Görüntü tamponu (Wi-Fi titremesi):** Kareler ağdan eşit aralıkla gelmez; geldikleri anda çizilirse görüntü takılır. Tampon, kareleri iPhone'un zaman damgasına göre eşit aralıkla çizer. Varsayılan **otomatik**: uygulama son birkaç saniyenin titremesini ölçüp tamponu 40–160 ms arasında kendisi ayarlar (artış hemen, azalış yavaş). Elle ayar için yansıtma sırasında **YUKARI/AŞAĞI** tuşları (20 ms'lik adımlar, 0–200 ms; 0 kapalı); menüde "Görüntü tamponu" satırında **OK** otomatiğe döner. Tampon görüntüyü geciktirdiği için ses de aynı kadar geciktirilir (senkron bozulmaz), ama her şey o kadar daha geç görünür. Günlükteki `Titreme:` satırı titremenin dağılımını ve tamponu aşan kare sayısını, `Otomatik tampon:` satırı ayar değişimlerini gösterir.
 
 ## AirPlay adını değiştirme
 
@@ -76,9 +76,23 @@ Bir iPhone ya da iPad ekran yansıtma/ses için bağlanınca TV'de kısa bir �
 
 QR ekranı 20 saniye boşta (tuşa basılmadan, dokunulmadan) kalırsa QR kodu ve yazılar eski DVD logosu gibi ekranda sekmeye başlar, duvara çarpınca renk değiştirir ve köşeye tam isabet ederse 🎉 çıkar. Aynı zamanda ekran yanmasını önler. Herhangi bir tuşa basınca ya da dokununca durur ve QR yerine döner; bir bağlantı başlayınca ekran zaten değişir.
 
+## TV menüsü
+
+QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna basınca ekranda bir menü açılır. **MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) OK (orta) tuşu aynı menüyü açar.** Menü 30 saniye hiçbir tuşa basılmazsa ya da **Geri** ile kapanır.
+
+| Satır | Değiştirme |
+|---|---|
+| Açılışta otomatik başlat | SOL/SAĞ/OK açıp kapatır |
+| Ses/görüntü kayması | SOL/SAĞ ±20 ms, OK sıfırlar |
+| Görüntü tamponu | SOL/SAĞ ±20 ms (0 = kapalı), OK otomatiğe döner |
+| Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
+| Kapat | OK |
+
+Gezinme YUKARI/AŞAĞI ile yapılır. Dokunmatik ekranda satıra dokunmak "OK/artır", uzun basmak "azalt" işi görür. Menü kapalıyken yansıtma sırasındaki eski kısayollar sürer: SAĞ/SOL ses-görüntü kayması, YUKARI/AŞAĞI görüntü tamponu.
+
 ## Açılışta otomatik başlatma
 
-Ana (QR) ekranındayken kumandanın **MENU** tuşu "TV açılınca otomatik başlat" ayarını açıp kapatır (varsayılan kapalı). MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) **OK (orta) tuşuna basmak** aynı işi yapar. Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
+"TV açılınca otomatik başlat" ayarı **TV menüsündeki** ilk satırdır (varsayılan kapalı; bkz. [TV menüsü](#tv-menüsü)). Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
 
 ## Fotoğraf AirPlay (`/photo`)
 

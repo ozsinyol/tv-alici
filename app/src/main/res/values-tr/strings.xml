@@ -36,4 +36,13 @@
     <string name="off">kapalı</string>
     <string name="qr_hint">iPhone kamerasıyla QR\'ı okutun\nAdres: %1$s   PIN: %2$s\nAirPlay adı: %3$s</string>
     <string name="autostart_hint">Açılışta başlat: %1$s (MENU ya da OK\'a bas)</string>
+    <string name="menu_title">Menü</string>
+    <string name="menu_autostart">Açılışta otomatik başlat</string>
+    <string name="menu_sync">Ses/görüntü kayması</string>
+    <string name="menu_buffer">Görüntü tamponu</string>
+    <string name="menu_zoom">Yakınlaştırma</string>
+    <string name="menu_close">Kapat</string>
+    <string name="buffer_auto">Otomatik (%1$s ms)</string>
+    <string name="buffer_off">Kapalı</string>
+    <string name="menu_hint">◀ ▶ değiştir · OK seç · GERİ kapat</string>
 </resources>

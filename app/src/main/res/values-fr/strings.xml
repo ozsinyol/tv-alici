@@ -36,4 +36,13 @@
     <string name="off">désactivé</string>
     <string name="qr_hint">Scannez le code QR avec l\'appareil photo de l\'iPhone\nAdresse : %1$s   PIN : %2$s\nNom AirPlay : %3$s</string>
     <string name="autostart_hint">Démarrer à l\'allumage : %1$s (appuyez sur MENU ou OK)</string>
+    <string name="menu_title">Menu</string>
+    <string name="menu_autostart">Démarrer au lancement</string>
+    <string name="menu_sync">Synchro audio/vidéo</string>
+    <string name="menu_buffer">Tampon vidéo</string>
+    <string name="menu_zoom">Zoom</string>
+    <string name="menu_close">Fermer</string>
+    <string name="buffer_auto">Auto (%1$s ms)</string>
+    <string name="buffer_off">Désactivé</string>
+    <string name="menu_hint">◀ ▶ modifier · OK choisir · RETOUR fermer</string>
 </resources>

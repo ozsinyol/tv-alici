@@ -288,6 +288,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
         // Ekran doner ya da yerlesim degisirse (configChanges oldugu icin Activity yeniden olusmaz) yansitmayi yeniden sigdir.
@@ -686,6 +687,189 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    // ---- TV menusu: MENU tusu ya da QR/yansitma ekraninda OK ile acilir (Mi TV Stick'te MENU tusu yok) ----
+
+    private class MenuItem(
+        val label: Int,
+        val value: () -> String,
+        val left: () -> Unit,
+        val right: () -> Unit,
+        val ok: () -> Unit = right
+    )
+
+    private var menuOpen = false
+    private var menuIndex = 0
+    private val menuHide = Runnable { closeMenu() }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private val menuBox: LinearLayout by lazy {
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(28, 28, 30))
+            setPadding(dp(24), dp(20), dp(24), dp(16))
+            isClickable = true // kutunun ici arkadaki "disari tikla = kapat" katmanina gitmesin
+        }
+    }
+    private val menuLayer: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            visibility = android.view.View.GONE
+            isClickable = true
+            setOnClickListener { closeMenu() }
+            addView(
+                menuBox,
+                FrameLayout.LayoutParams(minOf(dp(560), resources.displayMetrics.widthPixels - dp(32)), WRAP_CONTENT, Gravity.CENTER)
+            )
+        }
+    }
+
+    private fun setSyncOffset(v: Int) {
+        val c = v.coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
+        SyncSettings.offsetMs = c
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("syncOffsetMs", c).apply()
+    }
+
+    private fun setBuffer(v: Int) {
+        val c = v.coerceIn(0, SyncSettings.MAX_JITTER_MS)
+        SyncSettings.jitterBufferMs = c
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", c).apply()
+    }
+
+    private fun setBufferAuto() {
+        SyncSettings.jitterBufferMs = SyncSettings.AUTO
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
+    }
+
+    private fun bufferText(): String = when {
+        SyncSettings.jitterBufferMs == SyncSettings.AUTO -> getString(R.string.buffer_auto, SyncSettings.autoJitterMs.toString())
+        SyncSettings.jitterBufferMs == 0 -> getString(R.string.buffer_off)
+        else -> "${SyncSettings.jitterBufferMs} ms"
+    }
+
+    private fun menuItems(): List<MenuItem> {
+        val step = SyncSettings.STEP_MS
+        val list = mutableListOf<MenuItem>()
+        list += MenuItem(
+            R.string.menu_autostart,
+            { getString(if (autostartOn()) R.string.on else R.string.off) },
+            { toggleAutostart() }, { toggleAutostart() }
+        )
+        list += MenuItem(
+            R.string.menu_sync,
+            { (if (SyncSettings.offsetMs > 0) "+" else "") + SyncSettings.offsetMs + " ms" },
+            { setSyncOffset(SyncSettings.offsetMs - step) }, { setSyncOffset(SyncSettings.offsetMs + step) },
+            { setSyncOffset(0) }
+        )
+        list += MenuItem(
+            R.string.menu_buffer,
+            { bufferText() },
+            { setBuffer(SyncSettings.effectiveJitterMs - step) }, { setBuffer(SyncSettings.effectiveJitterMs + step) },
+            { setBufferAuto() }
+        )
+        if (mirrorActive && lastMirrorW > 0) {
+            list += MenuItem(
+                R.string.menu_zoom,
+                { "%.2f×".format(java.util.Locale.US, mirrorZoom.toDouble()) },
+                { setMirrorZoom(mirrorZoom / 1.25f) }, { setMirrorZoom(mirrorZoom * 1.25f) },
+                { setMirrorZoom(1f) }
+            )
+        }
+        list += MenuItem(R.string.menu_close, { "" }, {}, {}, { closeMenu() })
+        return list
+    }
+
+    private fun renderMenu() {
+        val items = menuItems()
+        menuIndex = menuIndex.coerceIn(0, items.size - 1)
+        menuBox.removeAllViews()
+        menuBox.addView(TextView(this).apply {
+            text = getString(R.string.menu_title)
+            textSize = 26f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, dp(12))
+        })
+        items.forEachIndexed { i, item ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                setBackgroundColor(if (i == menuIndex) Color.rgb(0, 102, 214) else Color.TRANSPARENT)
+                isClickable = true
+                // Dokunma: secili satirin "tamam" eylemi; uzun basma: azalt.
+                setOnClickListener {
+                    menuIndex = i
+                    item.ok()
+                    scheduleMenuClose()
+                    if (menuOpen) renderMenu()
+                }
+                setOnLongClickListener {
+                    menuIndex = i
+                    item.left()
+                    scheduleMenuClose()
+                    if (menuOpen) renderMenu()
+                    true
+                }
+            }
+            row.addView(TextView(this).apply {
+                text = getString(item.label)
+                textSize = 20f
+                setTextColor(Color.WHITE)
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            row.addView(TextView(this).apply {
+                text = item.value()
+                textSize = 20f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.END
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            menuBox.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+        menuBox.addView(TextView(this).apply {
+            text = getString(R.string.menu_hint)
+            textSize = 14f
+            setTextColor(Color.rgb(181, 181, 189))
+            setPadding(0, dp(12), 0, 0)
+        })
+    }
+
+    private fun scheduleMenuClose() {
+        mainHandler.removeCallbacks(menuHide)
+        mainHandler.postDelayed(menuHide, 30_000L)
+    }
+
+    private fun openMenu() {
+        if (menuOpen) return
+        menuOpen = true
+        menuIndex = 0
+        renderMenu()
+        menuLayer.visibility = android.view.View.VISIBLE
+        scheduleMenuClose()
+    }
+
+    private fun closeMenu() {
+        menuOpen = false
+        mainHandler.removeCallbacks(menuHide)
+        menuLayer.visibility = android.view.View.GONE
+    }
+
+    /** Menu aciksa tuslari menu yonetir; ilgilenmedigi tuslar (ses vb.) sisteme birakilir (false). */
+    private fun menuKey(keyCode: Int, event: KeyEvent): Boolean {
+        val items = menuItems()
+        scheduleMenuClose()
+        when {
+            keyCode == KeyEvent.KEYCODE_DPAD_UP -> menuIndex = (menuIndex - 1 + items.size) % items.size
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> menuIndex = (menuIndex + 1) % items.size
+            keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> items[menuIndex.coerceIn(0, items.size - 1)].left()
+            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> items[menuIndex.coerceIn(0, items.size - 1)].right()
+            isOkKey(keyCode) -> if (event.repeatCount == 0) items[menuIndex.coerceIn(0, items.size - 1)].ok()
+            keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_MENU -> if (event.repeatCount == 0) closeMenu()
+            else -> return false
+        }
+        if (menuOpen) renderMenu()
+        return true
+    }
+
     /** Web sayfasindan gelen mesaji ekranda 20 sn buyuk yazi olarak gosterir (bos metin kaldirir). */
     private fun say(text: String) {
         mainHandler.removeCallbacks(hideSay)
@@ -942,6 +1126,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         // Ziplayan QR'i durduran OK tusu ayri bir islem (otomatik baslatma degisimi) tetiklemesin.
         if (wasBouncing && isOkKey(keyCode)) return true
         if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
+        if (menuOpen) return menuKey(keyCode, event) || super.onKeyDown(keyCode, event)
+        // MENU her zaman menuyu acar; OK da (MENU tusu olmayan kumandalar icin) QR ya da yansitma ekraninda acar.
+        if (keyCode == KeyEvent.KEYCODE_MENU ||
+            (isOkKey(keyCode) && (mirrorActive || overlayView.visibility == android.view.View.VISIBLE))
+        ) {
+            if (event.repeatCount == 0) openMenu()
+            return true
+        }
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
@@ -950,14 +1142,6 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", v).apply()
             val text = if (v == 0) getString(R.string.jitter_off)
             else getString(R.string.jitter_manual, v.toString())
-            appendLog(text)
-            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-            return true
-        }
-        if (mirrorActive && isOkKey(keyCode) && event.repeatCount == 0) {
-            SyncSettings.jitterBufferMs = SyncSettings.AUTO
-            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
-            val text = getString(R.string.jitter_auto, SyncSettings.autoJitterMs.toString())
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
@@ -974,15 +1158,6 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             }
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-            return true
-        }
-        if (keyCode == KeyEvent.KEYCODE_MENU && overlayView.visibility == android.view.View.VISIBLE) {
-            toggleAutostart()
-            return true
-        }
-        // MENU tusu olmayan kumandalar (ör. Mi TV Stick) icin: QR ekraninda OK'a basmak.
-        if (isOkKey(keyCode) && overlayView.visibility == android.view.View.VISIBLE) {
-            if (event.repeatCount == 0) toggleAutostart()
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -1029,6 +1204,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (menuOpen) {
+            closeMenu()
+            return
+        }
         if (overlayView.visibility == android.view.View.GONE) {
             player?.stop()
             photoView.visibility = android.view.View.GONE

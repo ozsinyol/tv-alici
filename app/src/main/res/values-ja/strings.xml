@@ -36,4 +36,13 @@
     <string name="off">オフ</string>
     <string name="qr_hint">iPhone のカメラで QR コードを読み取ってください\nアドレス: %1$s   PIN: %2$s\nAirPlay 名: %3$s</string>
     <string name="autostart_hint">電源オン時に起動: %1$s(MENU または OK を押す)</string>
+    <string name="menu_title">メニュー</string>
+    <string name="menu_autostart">起動時に自動で開始</string>
+    <string name="menu_sync">音声と映像の同期</string>
+    <string name="menu_buffer">映像バッファ</string>
+    <string name="menu_zoom">ズーム</string>
+    <string name="menu_close">閉じる</string>
+    <string name="buffer_auto">自動 (%1$s ms)</string>
+    <string name="buffer_off">オフ</string>
+    <string name="menu_hint">◀ ▶ 変更 · OK 選択 · 戻る 閉じる</string>
 </resources>

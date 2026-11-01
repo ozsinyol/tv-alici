@@ -36,4 +36,13 @@
     <string name="off">выкл.</string>
     <string name="qr_hint">Отсканируйте QR-код камерой iPhone\nАдрес: %1$s   PIN: %2$s\nИмя AirPlay: %3$s</string>
     <string name="autostart_hint">Запуск при включении: %1$s (нажмите MENU или OK)</string>
+    <string name="menu_title">Меню</string>
+    <string name="menu_autostart">Запуск при включении</string>
+    <string name="menu_sync">Синхронизация звука и видео</string>
+    <string name="menu_buffer">Буфер видео</string>
+    <string name="menu_zoom">Масштаб</string>
+    <string name="menu_close">Закрыть</string>
+    <string name="buffer_auto">Авто (%1$s мс)</string>
+    <string name="buffer_off">Выкл.</string>
+    <string name="menu_hint">◀ ▶ изменить · OK выбрать · НАЗАД закрыть</string>
 </resources>

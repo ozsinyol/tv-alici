@@ -36,4 +36,13 @@
     <string name="off">aus</string>
     <string name="qr_hint">Scanne den QR-Code mit der iPhone-Kamera\nAdresse: %1$s   PIN: %2$s\nAirPlay-Name: %3$s</string>
     <string name="autostart_hint">Beim Einschalten starten: %1$s (MENU oder OK drücken)</string>
+    <string name="menu_title">Menü</string>
+    <string name="menu_autostart">Beim Start automatisch öffnen</string>
+    <string name="menu_sync">Audio-/Video-Sync</string>
+    <string name="menu_buffer">Videopuffer</string>
+    <string name="menu_zoom">Zoom</string>
+    <string name="menu_close">Schließen</string>
+    <string name="buffer_auto">Auto (%1$s ms)</string>
+    <string name="buffer_off">Aus</string>
+    <string name="menu_hint">◀ ▶ ändern · OK wählen · ZURÜCK schließen</string>
 </resources>

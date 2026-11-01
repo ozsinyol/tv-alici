@@ -36,4 +36,13 @@
     <string name="off">disattivato</string>
     <string name="qr_hint">Inquadra il codice QR con la fotocamera dell\'iPhone\nIndirizzo: %1$s   PIN: %2$s\nNome AirPlay: %3$s</string>
     <string name="autostart_hint">Avvia all\'accensione: %1$s (premi MENU o OK)</string>
+    <string name="menu_title">Menu</string>
+    <string name="menu_autostart">Avvia all\'accensione</string>
+    <string name="menu_sync">Sincronia audio/video</string>
+    <string name="menu_buffer">Buffer video</string>
+    <string name="menu_zoom">Zoom</string>
+    <string name="menu_close">Chiudi</string>
+    <string name="buffer_auto">Auto (%1$s ms)</string>
+    <string name="buffer_off">Disattivato</string>
+    <string name="menu_hint">◀ ▶ cambia · OK scegli · INDIETRO chiudi</string>
 </resources>

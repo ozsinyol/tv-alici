@@ -36,4 +36,13 @@
     <string name="off">متوقف</string>
     <string name="qr_hint">امسح رمز QR بكاميرا iPhone\nالعنوان: %1$s   PIN: %2$s\nاسم AirPlay: %3$s</string>
     <string name="autostart_hint">البدء عند التشغيل: %1$s (اضغط MENU أو OK)</string>
+    <string name="menu_title">القائمة</string>
+    <string name="menu_autostart">التشغيل التلقائي عند الإقلاع</string>
+    <string name="menu_sync">مزامنة الصوت والصورة</string>
+    <string name="menu_buffer">مخزن الفيديو المؤقت</string>
+    <string name="menu_zoom">تكبير</string>
+    <string name="menu_close">إغلاق</string>
+    <string name="buffer_auto">تلقائي (%1$s ms)</string>
+    <string name="buffer_off">إيقاف</string>
+    <string name="menu_hint">◀ ▶ تغيير · OK اختيار · رجوع إغلاق</string>
 </resources>
