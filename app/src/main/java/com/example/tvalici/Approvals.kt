@@ -39,13 +39,23 @@ class Approvals(
         class Wait(val pending: Pending, val owner: Boolean) : Begin()
     }
 
+    private companion object {
+        /** Bu sure hic baglanmayan "hep izin ver" cihazin guveni kendiliginden kalkar. */
+        const val TRUST_TTL_MS = 30L * 24 * 60 * 60 * 1000
+        const val TOUCH_EVERY_MS = 24L * 60 * 60 * 1000
+    }
+
     private val pending = HashMap<String, Pending>()
     private val allowedNow = HashSet<String>() // bu uygulama acilisinda izin verilenler
     private val deniedUntil = HashMap<String, Long>()
 
     @Synchronized
     private fun begin(ip: String): Begin {
-        if (ip in allowedNow || ip in trusted()) return Begin.Allowed
+        if (ip in allowedNow) return Begin.Allowed
+        if (ip in trusted()) {
+            touch(ip)
+            return Begin.Allowed
+        }
         if ((deniedUntil[ip] ?: 0L) > System.currentTimeMillis()) return Begin.Denied
         val existing = pending[ip]
         if (existing != null) return Begin.Wait(existing, false)
@@ -61,7 +71,10 @@ class Approvals(
             Result.ONCE -> allowedNow.add(ip)
             Result.ALWAYS -> {
                 allowedNow.add(ip)
-                prefs.edit().putStringSet("trusted", trusted() + ip).apply()
+                prefs.edit()
+                    .putStringSet("trusted", trusted() + ip)
+                    .putLong("trustedAt_$ip", System.currentTimeMillis())
+                    .apply()
             }
             Result.DENY -> deniedUntil[ip] = System.currentTimeMillis() + 60_000L
         }
@@ -72,7 +85,46 @@ class Approvals(
     @Synchronized
     private fun isAllowed(ip: String): Boolean = ip in allowedNow
 
-    private fun trusted(): Set<String> = prefs.getStringSet("trusted", emptySet()) ?: emptySet()
+    /**
+     * Kalici guvenilen IP'ler. Son kullanimi TRUST_TTL_MS'den eski olanlar silinir; zaman damgasi
+     * olmayan (eski surumden kalan) kayitlara simdiki zaman yazilir.
+     */
+    @Synchronized
+    private fun trusted(): Set<String> {
+        val raw = prefs.getStringSet("trusted", emptySet()) ?: emptySet()
+        if (raw.isEmpty()) return raw
+        val now = System.currentTimeMillis()
+        val live = HashSet<String>()
+        val ed = prefs.edit()
+        var changed = false
+        for (ip in raw) {
+            val t = prefs.getLong("trustedAt_$ip", 0L)
+            when {
+                t == 0L -> {
+                    ed.putLong("trustedAt_$ip", now)
+                    live.add(ip)
+                    changed = true
+                }
+                now - t > TRUST_TTL_MS -> {
+                    ed.remove("trustedAt_$ip")
+                    changed = true
+                    log("Güven süresi doldu: $ip")
+                }
+                else -> live.add(ip)
+            }
+        }
+        if (live.size != raw.size) ed.putStringSet("trusted", live)
+        if (changed) ed.apply()
+        return live
+    }
+
+    /** Kullanilan guvenilen cihazin damgasini gunde en fazla bir kez tazeler. */
+    private fun touch(ip: String) {
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("trustedAt_$ip", 0L) > TOUCH_EVERY_MS) {
+            prefs.edit().putLong("trustedAt_$ip", now).apply()
+        }
+    }
 
     /** "ip (kalici)" ya da "ip (bu acilista)" bicimli satirlar. */
     @Synchronized
@@ -85,7 +137,7 @@ class Approvals(
 
     @Synchronized
     override fun forget(ip: String) {
-        prefs.edit().putStringSet("trusted", trusted() - ip).apply()
+        prefs.edit().putStringSet("trusted", trusted() - ip).remove("trustedAt_$ip").apply()
         allowedNow.remove(ip)
         deniedUntil.remove(ip)
         log("Güvenilen cihaz silindi: $ip")
@@ -93,7 +145,9 @@ class Approvals(
 
     @Synchronized
     override fun forgetAll() {
-        prefs.edit().remove("trusted").apply()
+        val ed = prefs.edit().remove("trusted")
+        for (ip in trusted()) ed.remove("trustedAt_$ip")
+        ed.apply()
         allowedNow.clear()
         deniedUntil.clear()
         log("Tüm güvenilen cihazlar silindi")

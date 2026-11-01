@@ -56,6 +56,8 @@ iPhone'un AirPlay listesinde görünen ad varsayılan olarak "TV Alici"dır. De�
 
 Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep izin ver / Reddet** penceresi çıkar (uzaktan kumandayla ya da dokunarak seçilir). 30 saniye içinde cevap gelmezse ya da reddedilirse bağlantı kesilir ve aynı cihaz 1 dakika boyunca tekrar sorulmaz. "Hep izin ver" cihazın IP adresini kalıcı olarak güvenilir yapar.
 
+"Hep izin ver" denilen bir cihaz 30 gün hiç bağlanmazsa güveni kendiliğinden kalkar ve bir sonraki bağlantıda yeniden sorulur; düzenli kullanılan cihazın süresi her kullanımda yenilenir.
+
 Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
 
 ## Açılışta otomatik başlatma
