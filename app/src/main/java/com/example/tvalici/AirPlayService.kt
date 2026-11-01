@@ -12,11 +12,11 @@ import android.os.Build
 import android.os.IBinder
 
 /**
- * Uygulama acikken sureci "on plan servisi" olarak tutar: AirPlay sunucusu ve mDNS yayini
- * MainActivity icinde calistigi icin, uygulamadan cikilinca ya da ekran kapaninca Android'in
- * sureci oldurmesini (muzigin kesilmesini, cihazin AirPlay listesinden kaybolmasini) onler.
- * MainActivity acilinca baslatilir, kapaninca durdurulur. Bildirim sistemin zorunlu kildigi
- * kucuk bir gostergedir; dokununca uygulamaya doner.
+ * Keeps the process alive as a "foreground service" while the app is open: since the AirPlay server
+ * and the mDNS advertising run inside MainActivity, this prevents Android from killing the process
+ * when you leave the app or the screen turns off (which would cut the music and make the device
+ * disappear from the AirPlay list). It is started when MainActivity starts and stopped when it
+ * closes. The notification is a small indicator that the system requires; tapping it returns to the app.
  */
 class AirPlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -46,10 +46,10 @@ class AirPlayService : Service() {
                 startForeground(NOTIF_ID, n)
             }
         } catch (e: Exception) {
-            // Izin/kisit nedeniyle on plana alinamazsa uygulama yine de calismaya devam eder.
+            // If it cannot be moved to the foreground because of a permission/restriction, the app keeps working anyway.
             stopSelf()
         }
-        // Surec olurse Activity de yok demektir; bos bir servis yeniden baslamasin.
+        // If the process dies, the Activity is gone too; an empty service should not restart.
         return START_NOT_STICKY
     }
 

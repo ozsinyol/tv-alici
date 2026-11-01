@@ -7,28 +7,28 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 
 /**
- * TV uzerinde calisan kucuk web sunucusu. Tek sayfalik arayuz (Gonder / Ayarlar / Gunluk).
- * GET  /                  -> arayuz sayfasi (?pin=XXXX ile PIN onceden dolar, #ayar #gunluk ile sekme secilir)
- * PUT  /upload            -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
- * PUT  /update-apk        -> uygulamanin yeni APK'sini alir; dogrulanirsa TV'de kurulum ekrani acilir
- * GET  /api/status        -> oynatma durumu (JSON: state, title, pos, dur, vol, queue ...)
- * GET  /manifest.json, /apple-touch-icon.png -> ana ekrana eklenebilir (PWA) kumanda
- * GET  /api/version       -> kurulu surum (v<numara>)
- * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop, next, zoomin, zoomout, zoomreset, mute; seek ve vol "cmd:deger" bicimiyle)
- * PUT  /upload + X-Queue: 1 -> video oynatma sirasinin sonuna eklenir (bitince siradaki oynar)
- * POST /api/play?u=URL    -> http(s) video adresini TV'de oynatir (yer imi / adres kutusu)
- * POST /api/say?text=..  -> TV ekraninda buyuk mesaj gosterir (bos metin kaldirir)
- * GET  /api/name          -> AirPlay'de gorunen sunucu adi;  POST /api/name?set=AD -> degistirir
- * GET  /api/trusted       -> guvenilen cihazlar (satir satir);  POST /api/trusted?forget=IP | ?clear=1
- * GET  /log               -> duz metin gunluk (PIN: ?pin=.. ya da X-Pin basligi)
- * GET  /name, /trusted    -> eski adresler; arayuzdeki ilgili sekmeye yonlendirir
- * PIN: X-Pin basligi ya da (yalnizca /log icin) ?pin=. Ayni IP'den 5 yanlis denemeden sonra 5 dk kilit.
+ * A small web server that runs on the TV. A single-page interface (Remote / Send / Settings).
+ * GET  /                  -> the interface page (?pin=XXXX pre-fills the PIN, #ayar #gunluk select the tab)
+ * PUT  /upload            -> receives a video as a stream; playback starts before the upload finishes
+ * PUT  /update-apk        -> receives a new APK of the app; if it is verified, the install screen opens on the TV
+ * GET  /api/status        -> playback state (JSON: state, title, pos, dur, vol, queue ...)
+ * GET  /manifest.json, /apple-touch-icon.png -> an add-to-home-screen (PWA) remote
+ * GET  /api/version       -> the installed version (v<number>)
+ * POST /control?cmd=..    -> playback remote (playpause, back10, fwd10, volup, voldown, stop, next, zoomin, zoomout, zoomreset, mute; seek and vol use the "cmd:value" form)
+ * PUT  /upload + X-Queue: 1 -> the video is added to the end of the playback queue (the next one plays when it finishes)
+ * POST /api/play?u=URL    -> plays an http(s) video address on the TV (bookmarklet / address box)
+ * POST /api/say?text=..  -> shows a large message on the TV screen (an empty text removes it)
+ * GET  /api/name          -> the server name shown in AirPlay;  POST /api/name?set=NAME -> changes it
+ * GET  /api/trusted       -> trusted devices (line by line);  POST /api/trusted?forget=IP | ?clear=1
+ * GET  /log               -> plain-text log (PIN: ?pin=.. or the X-Pin header)
+ * GET  /name, /trusted    -> old addresses; redirects to the matching tab of the interface
+ * PIN: the X-Pin header or (for /log only) ?pin=. After 5 wrong attempts from the same IP, locked for 5 min.
  */
-/** AirPlay'de gorunen sunucu adini okuma/degistirme. */
+/** Reading/changing the server name shown in AirPlay. */
 interface NameAdmin {
     fun serverName(): String
 
-    /** Gecerliyse adi kaydedip yayini yeniler; gecersizse false doner. */
+    /** If valid, saves the name and refreshes the advertising; returns false if invalid. */
     fun setServerName(raw: String): Boolean
 }
 
@@ -38,15 +38,15 @@ class VideoServer(
     private val pin: String,
     private val onUploadStart: (Upload) -> Unit,
     private val onControl: (String) -> Unit,
-    /** Ekranda buyuk yazi olarak gosterilecek mesaj (bos metin mesaji kaldirir). */
+    /** The message to show on screen as large text (an empty text removes the message). */
     private val onSay: (String) -> Unit,
-    /** Verilen http(s) video adresini TV'de oynatir (duz MP4/HLS). */
+    /** Plays the given http(s) video address on the TV (plain MP4/HLS). */
     private val onPlayUrl: (String) -> Unit,
-    /** Yuklenen APK'yi dogrular, sorun yoksa kurulumu baslatir. Sorunu metin olarak dondurur (null = tamam). */
+    /** Verifies the uploaded APK and starts the installation if there is no problem. Returns the problem as text (null = OK). */
     private val onApk: (File) -> String?,
     private val trust: TrustAdmin,
     private val names: NameAdmin,
-    /** /api/status yaniti (JSON); MainActivity saniyede bir gunceller. */
+    /** The /api/status response (JSON); MainActivity updates it once a second. */
     private val status: () -> String
 ) : NanoHTTPD(port) {
 
@@ -65,7 +65,7 @@ class VideoServer(
     private val tooMany = status(429, "Too Many Requests")
     private val found = status(302, "Found")
 
-    /** Tarayicinin Accept-Language basligina gore Turkce ya da Ingilizce metin secer. */
+    /** Picks the Turkish or English text according to the browser's Accept-Language header. */
     private fun L(session: IHTTPSession, tr: String, en: String): String =
         if ((session.headers["accept-language"] ?: "").trim().lowercase().startsWith("tr")) tr else en
 
@@ -99,7 +99,7 @@ class VideoServer(
         }
     }
 
-    /** PIN dogruysa null; yanlissa ya da kilitliyse donecek yaniti verir. Yanlis denemeleri sayar. */
+    /** Returns null if the PIN is correct; otherwise returns the response to send if it is wrong or locked. Counts wrong attempts. */
     @Synchronized
     private fun authFail(session: IHTTPSession, supplied: String?): Response? {
         val ip = session.remoteIpAddress ?: "?"
@@ -192,7 +192,7 @@ class VideoServer(
 
     private fun handleControl(session: IHTTPSession): Response {
         authFail(session, session.headers["x-pin"])?.let { return it }
-        val cmd = session.parms["cmd"] ?: return text("cmd yok", Response.Status.BAD_REQUEST)
+        val cmd = session.parms["cmd"] ?: return text("Missing cmd", Response.Status.BAD_REQUEST)
         val arg = session.parms["v"]
         if (cmd != "ping") onControl(if (arg != null) "$cmd:$arg" else cmd)
         return text("OK")
@@ -206,7 +206,7 @@ class VideoServer(
         val length = session.headers["content-length"]?.toLongOrNull()
             ?: return text(L(session, "Boyut bilgisi yok", "No size information"), Response.Status.BAD_REQUEST)
 
-        // Kuyruga eklenmiyorsa onceki yuklemeleri temizle (onbellek dolmasin).
+        // If it is not being added to the queue, clean up the previous uploads (so the cache does not fill up).
         val queued = session.headers["x-queue"] == "1"
         if (!queued) {
             dir.listFiles()?.forEach { f ->
@@ -260,7 +260,7 @@ class VideoServer(
             r.closeConnection(true)
             return r
         }
-        // FileProvider yalnizca cache/updates/ altini paylasir (file_paths.xml).
+        // FileProvider shares only cache/updates/ (file_paths.xml).
         val updDir = File(dir, "updates")
         updDir.mkdirs()
         val dest = File(updDir, "update.apk")
@@ -304,7 +304,7 @@ class VideoServer(
         private const val LOCK_MS = 5 * 60 * 1000L
         private const val MAX_APK = 150L * 1024 * 1024
 
-        // Ana ekrana ekle simgesi (180x180 PNG, base64).
+        // The add-to-home-screen icon (180x180 PNG, base64).
         private const val ICON_PNG_B64 = "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"
 
         private const val PAGE = """<!doctype html>

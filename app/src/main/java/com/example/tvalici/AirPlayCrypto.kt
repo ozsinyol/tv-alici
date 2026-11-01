@@ -10,7 +10,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** Ed25519 imza (net.i2p.crypto:eddsa, saf Java, her Android surumunde calisir). */
+/** Ed25519 signature (net.i2p.crypto:eddsa, pure Java, works on every Android version). */
 object Ed25519 {
     private val spec = EdDSANamedCurveTable.getByName("Ed25519")
 
@@ -26,7 +26,7 @@ object Ed25519 {
     }
 }
 
-/** X25519 (RFC 7748), BigInteger ile. Hiz onemli degil, el sikisma basina bir kez calisir. */
+/** X25519 (RFC 7748) using BigInteger. Speed does not matter; it runs once per handshake. */
 object X25519 {
     private val P: BigInteger = BigInteger.ONE.shiftLeft(255).subtract(BigInteger.valueOf(19))
     private val A24: BigInteger = BigInteger.valueOf(121665)
@@ -97,7 +97,7 @@ object AirPlayCrypto {
         return md.digest()
     }
 
-    /** pair-verify imzasini ortak sirdan turetilen AES-128-CTR ile sifreler. */
+    /** Encrypts the pair-verify signature with AES-128-CTR derived from the shared secret. */
     fun pairVerifyEncrypt(sharedSecret: ByteArray, data: ByteArray): ByteArray {
         val key = sha512("Pair-Verify-AES-Key", sharedSecret).copyOf(16)
         val iv = sha512("Pair-Verify-AES-IV", sharedSecret).copyOf(16)

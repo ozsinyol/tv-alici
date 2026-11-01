@@ -1,12 +1,12 @@
 package com.example.tvalici
 
 /**
- * FairPlay (AirPlay) el sikisma yanitlari: /fp-setup 1. ve 2. asama.
+ * FairPlay (AirPlay) handshake responses: /fp-setup stages 1 and 2.
  *
- * Asagidaki sabit yanit tablolari ve baslik, shairplay / UxPlay projesindeki
- * lib/fairplay_playfair.c dosyasindan alinmistir.
- *   Copyright (C) 2018 Juho Vaha-Herttua, GNU LGPL surum 2.1 veya sonrasi.
- * Kaynak: https://github.com/FDH2/UxPlay (lib/fairplay_playfair.c)
+ * The constant response tables and the header below are taken from the shairplay / UxPlay
+ * project, file lib/fairplay_playfair.c.
+ *   Copyright (C) 2018 Juho Vaha-Herttua, GNU LGPL version 2.1 or later.
+ * Source: https://github.com/FDH2/UxPlay (lib/fairplay_playfair.c)
  */
 object AirPlayFairPlay {
 
@@ -25,7 +25,7 @@ object AirPlayFairPlay {
     private val replies = REPLY_HEX.map { hex(it) }
     private val header = hex(HEADER_HEX)
 
-    /** 1. asama: 16 baytlik istek, 142 baytlik yanit. Hatada null. */
+    /** Stage 1: 16-byte request, 142-byte response. Returns null on failure. */
     fun setup(req: ByteArray): ByteArray? {
         if (req.size != 16 || req[4].toInt() != 0x03) return null
         val mode = req[14].toInt()
@@ -33,7 +33,7 @@ object AirPlayFairPlay {
         return replies[mode].copyOf()
     }
 
-    /** 2. asama: 164 baytlik istek, 32 baytlik yanit. Hatada null. */
+    /** Stage 2: 164-byte request, 32-byte response. Returns null on failure. */
     fun handshake(req: ByteArray): ByteArray? {
         if (req.size != 164 || req[4].toInt() != 0x03) return null
         return header + req.copyOfRange(144, 164)

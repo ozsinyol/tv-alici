@@ -21,7 +21,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.concurrent.thread
 
-/** Ekran yansitma olaylari (MainActivity uygular). Hangi is parcacigindan cagrilirsa cagrilsin. */
+/** Screen mirroring events (implemented by MainActivity). May be called from any thread. */
 interface MirrorEvents {
     fun mirrorSurface(): Surface?
     fun mirrorStarted()
@@ -29,38 +29,38 @@ interface MirrorEvents {
     fun mirrorStopped()
 }
 
-/** Video AirPlay (/play) olaylari (MainActivity uygular). Hangi is parcacigindan cagrilirsa cagrilsin. */
+/** Video AirPlay (/play) events (implemented by MainActivity). May be called from any thread. */
 interface VideoEvents {
-    /** startSeconds ya da startFraction yoksa -1 gelir. */
+    /** -1 when neither startSeconds nor startFraction is given. */
     fun videoPlay(url: String, startSeconds: Double, startFraction: Double)
     fun videoRate(rate: Float)
     fun videoSeek(seconds: Double)
     fun videoStop()
     fun videoInfo(): VideoInfo
 
-    /** Fotograf AirPlay: JPEG'i ekranda gosterir. */
+    /** Photo AirPlay: shows the JPEG on screen. */
     fun showPhoto(jpeg: ByteArray)
 
-    /** Muzik AirPlay: sarki bilgisi geldi (alanlar bos olabilir). */
+    /** Music AirPlay: song information arrived (fields may be empty). */
     fun audioTrack(info: TrackInfo) {}
 
-    /** Muzik AirPlay: kapak resmi geldi; null kapagin kaldirildigini belirtir. */
+    /** Music AirPlay: cover art arrived; null means the cover was removed. */
     fun audioArt(image: ByteArray?) {}
 
-    /** Bir iPhone/iPad yayina baglandi (cihaz adi bilinmiyorsa null). */
+    /** An iPhone/iPad connected to the stream (null if the device name is unknown). */
     fun deviceConnected(name: String?, ip: String) {}
 
-    /** O cihazin baglantisi kapandi. */
+    /** That device's connection was closed. */
     fun deviceDisconnected() {}
 
-    /** Ses akisi basladi (ses odagi ve kilitler icin). */
+    /** The audio stream started (for audio focus and locks). */
     fun audioStarted() {}
 
-    /** Muzik AirPlay oturumu bitti; sarki bilgisi temizlenmeli. */
+    /** The music AirPlay session ended; the song information should be cleared. */
     fun audioEnded() {}
 }
 
-/** /playback-info yaniti icin oynatici anlik durumu. */
+/** Current player state for the /playback-info response. */
 class VideoInfo(
     val active: Boolean = false,
     val duration: Double = 0.0,
@@ -71,9 +71,9 @@ class VideoInfo(
 )
 
 /**
- * AirPlay sunucusu: /info, eslesme (pair-setup / pair-verify), FairPlay (/fp-setup) ve
- * ekran yansitma icin RTSP istekleri (SETUP, RECORD, TEARDOWN ...). Ayni TCP baglantisinda
- * HTTP ve RTSP istekleri karisik gelir; ikisi de ayni bicimde okunur.
+ * AirPlay server: /info, pairing (pair-setup / pair-verify), FairPlay (/fp-setup) and
+ * the RTSP requests for screen mirroring (SETUP, RECORD, TEARDOWN ...). HTTP and RTSP
+ * requests arrive mixed on the same TCP connection; both are read the same way.
  */
 class AirPlayServer(
     private val port: Int,
@@ -88,21 +88,21 @@ class AirPlayServer(
     @Volatile
     private var serverSocket: ServerSocket? = null
 
-    // Kimlik dogrulamadan once bile istek govdesi bu kadar bellek ayirabilir; asiri buyuk istek baglantiyi keser.
+    // Even before authentication a request body may allocate this much memory; an oversized request closes the connection.
     private val maxBody = 32 * 1024 * 1024
     private val sessions = mutableSetOf<Session>()
 
-    /** iPhone'un /reverse ile actigi olay kanali; TV -> iPhone olaylari buradan gider. */
+    /** The event channel the iPhone opens with /reverse; TV -> iPhone events go through it. */
     @Volatile
     private var reverse: Session? = null
 
     @Volatile
     private var videoSessionId: String? = null
 
-    // iPhone fotografi once onbellege yollayip sonra "goster" diyebilir; son birkacini tut.
+    // The iPhone may send a photo to the cache first and say "show" later; keep the last few.
     private val photoCache = LinkedHashMap<String, ByteArray>()
 
-    // Ag yazmalari ana is parcacigindan yapilamaz; olaylar sirayla tek bir is parcaciginda gider.
+    // Network writes cannot be made from the main thread; events are sent in order on a single worker thread.
     private val eventExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "airplay-event").apply { isDaemon = true }
     }
@@ -110,16 +110,16 @@ class AirPlayServer(
     @Volatile
     private var videoSessionPlist: NSObject? = null
 
-    /** Her TCP baglantisinin kendi eslesme ve yayin durumu vardir. */
+    /** Every TCP connection has its own pairing and stream state. */
     private class Session(val socket: Socket) {
         var out: OutputStream? = null
-        var authorized = false // TV'de izin verilen IP'den gelen baglanti
-        var keyMsg: ByteArray? = null // /fp-setup 2. asama mesaji (164 B)
-        var ecdhSecret: ByteArray? = null // pair-verify X25519 ortak sirri
+        var authorized = false // connection from an IP address that was allowed on the TV
+        var keyMsg: ByteArray? = null // the /fp-setup stage 2 message (164 B)
+        var ecdhSecret: ByteArray? = null // the pair-verify X25519 shared secret
         var aesKey: ByteArray? = null
-        var aesIv: ByteArray? = null // SETUP 1'deki eiv (ses AES-CBC IV'si)
+        var aesIv: ByteArray? = null // eiv from SETUP 1 (the audio AES-CBC IV)
         var ntp: NtpClient? = null
-        var announced = false // deviceConnected bildirildi
+        var announced = false // deviceConnected was announced
         var mirror: MirrorReceiver? = null
         var audio: AudioReceiver? = null
         var volumeDb = 0f
@@ -158,13 +158,13 @@ class AirPlayServer(
             try {
                 val ss = ServerSocket(port)
                 serverSocket = ss
-                log("AirPlay sunucusu :$port")
+                log("AirPlay server :$port")
                 while (running) {
                     val socket = ss.accept()
                     thread(name = "airplay-conn", isDaemon = true) { handle(socket) }
                 }
             } catch (e: Exception) {
-                if (running) log("Sunucu hatasi: ${e.message}")
+                if (running) log("Server error: ${e.message}")
             }
         }
     }
@@ -175,13 +175,13 @@ class AirPlayServer(
         try {
             serverSocket?.close()
         } catch (e: Exception) {
-            // kapanirken hata onemsiz
+            // errors while closing are unimportant
         }
         stopAllMirrors()
         synchronized(photoCache) { photoCache.clear() }
     }
 
-    /** TV'de oynatma durumu degisti (loading / playing / paused / stopped): iPhone'a olay yollar. */
+    /** The playback state changed on the TV (loading / playing / paused / stopped): sends an event to the iPhone. */
     fun notifyVideoState(state: String) {
         val r = reverse ?: return
         val out = r.out ?: return
@@ -205,13 +205,13 @@ class AirPlayServer(
                 out.write(body)
                 out.flush()
             }
-            log("  olay -> iPhone: $state")
+            log("  event -> iPhone: $state")
         } catch (e: Exception) {
-            log("  olay gonderilemedi: ${e.message}")
+            log("  event could not be sent: ${e.message}")
         }
     }
 
-    /** Geri tusu: acik yansitma baglantilarini kapatir. */
+    /** Back key: closes the open mirroring connections. */
     fun stopAllMirrors() {
         val copy = synchronized(sessions) { sessions.toList() }
         for (s in copy) s.closeAll()
@@ -223,7 +223,7 @@ class AirPlayServer(
     }
 
     private fun handle(socket: Socket) {
-        log("Baglanti: ${socket.inetAddress.hostAddress}")
+        log("Connection: ${socket.inetAddress.hostAddress}")
         val session = Session(socket)
         synchronized(sessions) { sessions.add(session) }
         try {
@@ -251,7 +251,7 @@ class AirPlayServer(
 
                     val length = headers["content-length"]?.toIntOrNull() ?: 0
                     if (length < 0 || length > maxBody) {
-                        log("Geçersiz/aşırı büyük istek gövdesi ($length B), bağlantı kapatıldı")
+                        log("Invalid/oversized request body ($length B), connection closed")
                         return
                     }
                     val body = ByteArray(length)
@@ -262,16 +262,16 @@ class AirPlayServer(
                         read += n
                     }
 
-                    // /reverse sonrasi iPhone, bizim /event isteklerimize yanit verir: yut.
+                    // After /reverse the iPhone replies to our /event requests: swallow them.
                     if (method.startsWith("HTTP/")) continue
 
-                    // Sik gelen nabiz isteklerini loglama.
+                    // Do not log the frequent heartbeat requests.
                     if (uri != "/feedback") log("$method ${shortUri(uri)} ($length B)")
                     respond(session, out, proto, method, uri, headers, body)
                 }
             }
         } catch (e: Exception) {
-            log("Baglanti kapandi: ${e.message}")
+            log("Connection closed: ${e.message}")
         } finally {
             synchronized(sessions) { sessions.remove(session) }
             if (reverse === session) reverse = null
@@ -298,14 +298,14 @@ class AirPlayServer(
         val octet = "application/octet-stream"
         val plist = "application/x-apple-binary-plist"
 
-        // /info herkese acik (cihaz listede gorunsun); gerisi icin TV'de izin gerekir.
+        // /info is open to everyone (so the device shows up in the list); everything else needs permission on the TV.
         val open = uri == "/info" || uri == "/feedback"
         if (!open && !s.authorized) {
-            log("  izin sorgusu: ${method} ${shortUri(uri)} cihaz-kimliği=${headers["x-apple-device-id"] ?: "yok"}")
+            log("  permission query: ${method} ${shortUri(uri)} device-id=${headers["x-apple-device-id"] ?: "none"}")
             if (gate.check(s.socket.inetAddress.hostAddress ?: "")) {
                 s.authorized = true
             } else {
-                log("  izin verilmedi")
+                log("  permission denied")
                 send(out, proto, 403, "Forbidden", ByteArray(0), null, cseq)
                 return
             }
@@ -316,7 +316,7 @@ class AirPlayServer(
             return
         }
         if (method == "POST" && uri == "/fp-setup") {
-            // FairPlay el sikismasi: 16 bayt -> 142 bayt, 164 bayt -> 32 bayt.
+            // FairPlay handshake: 16 bytes -> 142 bytes, 164 bytes -> 32 bytes.
             val reply = when (body.size) {
                 16 -> AirPlayFairPlay.setup(body)
                 164 -> AirPlayFairPlay.handshake(body)
@@ -324,35 +324,35 @@ class AirPlayServer(
             }
             if (reply != null) {
                 if (body.size == 164) s.keyMsg = body.copyOf()
-                log("  fp-setup ${body.size} B tamam")
+                log("  fp-setup ${body.size} B ok")
                 send(out, proto, 200, "OK", reply, octet, cseq)
             } else {
-                log("  fp-setup reddedildi (${body.size} B)")
+                log("  fp-setup rejected (${body.size} B)")
                 send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
             }
             return
         }
         if (method == "POST" && uri == "/pair-setup") {
-            // Istemci 32 bayt Ed25519 acik anahtarini yollar, biz kendimizinkini doneriz.
+            // The client sends its 32-byte Ed25519 public key and we return ours.
             send(out, proto, 200, "OK", airplay.publicKey, octet, cseq)
             return
         }
         if (method == "POST" && uri == "/pair-verify" && body.size >= 4) {
             if (body[0].toInt() == 1 && body.size == 68) {
-                // Adim 1: istemcinin gecici Curve25519 anahtari (+ Ed25519 anahtari) gelir.
+                // Step 1: the client's ephemeral Curve25519 key (+ Ed25519 key) arrives.
                 val clientCurve = body.copyOfRange(4, 36)
                 val ephPriv = ByteArray(32)
                 SecureRandom().nextBytes(ephPriv)
                 val ephPub = X25519.publicKey(ephPriv)
                 val secret = X25519.scalarMult(ephPriv, clientCurve)
-                s.ecdhSecret = secret // yayin anahtarinin turetilmesinde kullanilir
+                s.ecdhSecret = secret // used to derive the stream key
                 val signature = Ed25519.sign(airplay.seed, ephPub + clientCurve)
                 val encrypted = AirPlayCrypto.pairVerifyEncrypt(secret, signature)
-                log("  pair-verify 1 tamam")
+                log("  pair-verify 1 ok")
                 send(out, proto, 200, "OK", ephPub + encrypted, octet, cseq)
             } else {
-                // Adim 2: istemcinin imzasi. Ev agi prototipi, dogrulamayi atliyoruz.
-                log("  pair-verify 2 tamam")
+                // Step 2: the client's signature. This is a home-network prototype, so verification is skipped.
+                log("  pair-verify 2 ok")
                 send(out, proto, 200, "OK", ByteArray(0), octet, cseq)
             }
             return
@@ -388,10 +388,10 @@ class AirPlayServer(
                 val ctype = headers["content-type"]?.substringBefore(';')?.trim()?.lowercase()
                 if (ctype == "application/x-dmap-tagged") {
                     val info = DmapParser.parse(body)
-                    log("  sarki: ${info.artist ?: "?"} - ${info.title ?: "?"}")
+                    log("  song: ${info.artist ?: "?"} - ${info.title ?: "?"}")
                     video.audioTrack(info)
                 } else if (ctype == "image/jpeg" || ctype == "image/png") {
-                    log("  kapak resmi ${body.size} B")
+                    log("  cover art ${body.size} B")
                     video.audioArt(if (body.isEmpty()) null else body)
                 }
                 val text = if (ctype == null || ctype.startsWith("text/")) String(body, Charsets.ISO_8859_1) else ""
@@ -400,7 +400,7 @@ class AirPlayServer(
                     if (db != null) {
                         s.volumeDb = db
                         s.audio?.setVolumeDb(db)
-                        log("  ses seviyesi $db dB")
+                        log("  volume $db dB")
                     }
                 }
                 send(out, proto, 200, "OK", ByteArray(0), null, cseq)
@@ -429,10 +429,10 @@ class AirPlayServer(
         val interesting = listOf("upgrade", "content-type", "user-agent", "x-apple-device-id")
             .mapNotNull { k -> headers[k]?.let { "$k=$it" } }
             .joinToString(" ")
-        log("  islenmedi: $interesting")
+        log("  not handled: $interesting")
         if (body.isNotEmpty()) {
             val preview = body.take(48).joinToString("") { "%02x".format(it) }
-            log("  govde: $preview${if (body.size > 48) "..." else ""}")
+            log("  body: $preview${if (body.size > 48) "..." else ""}")
         }
         send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
     }
@@ -458,7 +458,7 @@ class AirPlayServer(
         val plist = "application/x-apple-binary-plist"
         when {
             method == "POST" && path == "/reverse" -> {
-                // HTTP baglantisi ters cevrilir: bundan sonra TV, iPhone'a /event yollayabilir.
+                // The HTTP connection is reversed: from now on the TV can send /event requests to the iPhone.
                 reverse = s
                 headers["x-apple-session-id"]?.let { videoSessionId = it }
                 val resp = "$proto 101 Switching Protocols\r\n" +
@@ -468,7 +468,7 @@ class AirPlayServer(
                     out.write(resp.toByteArray(Charsets.ISO_8859_1))
                     out.flush()
                 }
-                log("  /reverse: olay kanali acildi")
+                log("  /reverse: event channel opened")
                 return true
             }
             method == "POST" && path == "/play" -> {
@@ -487,12 +487,12 @@ class AirPlayServer(
                             videoSessionPlist = root.objectForKey("sessionID")
                         }
                     } catch (e: Exception) {
-                        log("  /play plist okunamadi: ${e.message}")
+                        log("  could not read /play plist: ${e.message}")
                     }
                 } else {
-                    // Eski bicim: text/parameters
+                    // Old format: text/parameters
                     val text = String(body, Charsets.ISO_8859_1)
-                    log("  /play metin: " + text.replace("\r", "").replace("\n", " | ").take(300))
+                    log("  /play text: " + text.replace("\r", "").replace("\n", " | ").take(300))
                     for (line in text.lines()) {
                         val kv = line.split(":", limit = 2)
                         if (kv.size < 2) continue
@@ -505,7 +505,7 @@ class AirPlayServer(
                 headers["x-apple-session-id"]?.let { videoSessionId = it }
                 val u = url
                 if (u == null || !(u.startsWith("http://") || u.startsWith("https://"))) {
-                    log("  /play desteklenmiyor: ${u ?: "adres yok"}")
+                    log("  /play not supported: ${u ?: "no address"}")
                     send(out, proto, 501, "Not Implemented", ByteArray(0), null, cseq)
                     return true
                 }
@@ -540,7 +540,7 @@ class AirPlayServer(
             method == "PUT" && path == "/photo" -> {
                 val key = headers["x-apple-assetkey"]
                 val action = headers["x-apple-assetaction"]
-                log("  /photo anahtar=${key ?: "-"} eylem=${action ?: "-"} (${body.size} B)")
+                log("  /photo key=${key ?: "-"} action=${action ?: "-"} (${body.size} B)")
                 var bytes: ByteArray? = if (body.isNotEmpty()) body else null
                 if (key != null) {
                     synchronized(photoCache) {
@@ -561,7 +561,7 @@ class AirPlayServer(
                     action.equals("cacheOnly", ignoreCase = true) ->
                         send(out, proto, 200, "OK", ByteArray(0), null, cseq)
                     b == null -> {
-                        log("  /photo: önbellekte yok, iPhone yeniden gönderecek")
+                        log("  /photo: not in the cache, the iPhone will resend it")
                         send(out, proto, 412, "Precondition Failed", ByteArray(0), null, cseq)
                     }
                     else -> {
@@ -612,7 +612,7 @@ class AirPlayServer(
             null
         }
         if (root == null) {
-            log("  SETUP: plist okunamadı")
+            log("  SETUP: could not read plist")
             send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
             return
         }
@@ -621,25 +621,25 @@ class AirPlayServer(
         val ekey = (root.objectForKey("ekey") as? NSData)?.bytes()
         val eiv = (root.objectForKey("eiv") as? NSData)?.bytes()
         if (ekey != null && eiv != null) {
-            // 1. SETUP: anahtar ve zamanlama.
+            // SETUP 1: key and timing.
             val keyMsg = s.keyMsg
             if (ekey.size != 72 || eiv.size != 16 || keyMsg == null) {
-                log("  SETUP 1 reddedildi (ekey=${ekey.size} eiv=${eiv.size} keymsg=${keyMsg?.size})")
+                log("  SETUP 1 rejected (ekey=${ekey.size} eiv=${eiv.size} keymsg=${keyMsg?.size})")
                 send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
                 return
             }
             if (!Playfair.load()) {
-                log("  playfair yüklenemedi")
+                log("  could not load playfair")
                 send(out, proto, 500, "Internal Server Error", ByteArray(0), null, cseq)
                 return
             }
             val decrypted = Playfair.decrypt(keyMsg, ekey)
             if (decrypted == null || decrypted.size != 16) {
-                log("  FairPlay anahtarı çözülemedi")
+                log("  could not decrypt the FairPlay key")
                 send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
                 return
             }
-            // Eslesme yapildiysa anahtar, pair-verify ortak sirriyla SHA-512'den gecirilir.
+            // If pairing was done, the key is run through SHA-512 together with the pair-verify shared secret.
             val secret = s.ecdhSecret
             val aes = if (secret != null) {
                 MessageDigest.getInstance("SHA-512").digest(decrypted + secret).copyOf(16)
@@ -648,7 +648,7 @@ class AirPlayServer(
             }
             s.aesKey = aes
             s.aesIv = eiv.copyOf()
-            log("  SETUP 1: yayın anahtarı hazır")
+            log("  SETUP 1: stream key ready")
             val devName = (root.objectForKey("name") as? NSString)?.content
                 ?.replace(Regex("[\\p{Cntrl}]"), " ")?.trim()?.take(40)?.takeIf { it.isNotEmpty() }
             if (!s.announced) {
@@ -682,7 +682,7 @@ class AirPlayServer(
                     110 -> {
                         val aes = s.aesKey
                         if (aes == null) {
-                            log("  SETUP 110: yayın anahtarı yok")
+                            log("  SETUP 110: no stream key")
                             send(out, proto, 400, "Bad Request", ByteArray(0), null, cseq)
                             return
                         }
@@ -699,7 +699,7 @@ class AirPlayServer(
                         receiver.start()
                         s.mirror = receiver
                         events.mirrorStarted()
-                        log("  SETUP 110: yansıtma portu ${receiver.port}")
+                        log("  SETUP 110: mirroring port ${receiver.port}")
                         val rd = NSDictionary()
                         rd.put("dataPort", NSNumber(receiver.port))
                         rd.put("type", NSNumber(110))
@@ -708,13 +708,13 @@ class AirPlayServer(
                     96 -> {
                         val data = DatagramSocket()
                         val control = DatagramSocket()
-                        // Portlari simdi oku: alici baslatilamazsa soketler kapanir ve localPort -1 olur.
+                        // Read the ports now: if the receiver cannot start, its sockets are closed and localPort becomes -1.
                         val dataPort = data.localPort
                         val controlPort = control.localPort
                         var ct = (d.objectForKey("ct") as? NSNumber)?.intValue() ?: 0
                         val audioFormat = (d.objectForKey("audioFormat") as? NSNumber)?.longValue() ?: 0L
                         if (ct == 0) {
-                            // ct gelmediyse audioFormat bitlerinden cikar.
+                            // If ct did not arrive, derive it from the audioFormat bits.
                             ct = when (audioFormat) {
                                 0x1000000L -> 8 // AAC-ELD
                                 0x400000L -> 4 // AAC-LC
@@ -738,7 +738,7 @@ class AirPlayServer(
                                 s.udp.add(control)
                             }
                         } else {
-                            log("  SETUP 96: yayın anahtarı yok, ses yok sayılıyor")
+                            log("  SETUP 96: no stream key, audio ignored")
                             s.udp.add(data)
                             s.udp.add(control)
                         }
@@ -748,7 +748,7 @@ class AirPlayServer(
                         rd.put("type", NSNumber(96))
                         respStreams.add(rd)
                     }
-                    else -> log("  SETUP: bilinmeyen akış türü $type")
+                    else -> log("  SETUP: unknown stream type $type")
                 }
             }
             resp.put("streams", NSArray(*respStreams.toTypedArray()))
@@ -773,7 +773,7 @@ class AirPlayServer(
                     }
                 }
             } catch (e: Exception) {
-                log("  TEARDOWN plist okunamadı: ${e.message}")
+                log("  could not read TEARDOWN plist: ${e.message}")
             }
         }
         log("  TEARDOWN 96=$has96 110=$has110")
@@ -792,7 +792,7 @@ class AirPlayServer(
         }
     }
 
-    // ---- yardimcilar ---------------------------------------------------------------------
+    // ---- helpers -------------------------------------------------------------------------
 
     private fun send(
         out: OutputStream,
@@ -833,7 +833,7 @@ class AirPlayServer(
         d.put("keepAliveLowPower", NSNumber(true))
         d.put("keepAliveSendStatsAsBody", NSNumber(true))
 
-        // Ekran yansitma icin ekran bilgisi (UxPlay ile ayni anahtarlar).
+        // Display information for screen mirroring (same keys as UxPlay).
         val display = NSDictionary()
         display.put("uuid", NSString("e0ff8a27-6738-3d56-8a16-cc53aacee925"))
         display.put("widthPhysical", NSNumber(0))
@@ -851,7 +851,7 @@ class AirPlayServer(
         return BinaryPropertyListWriter.writeToArray(d)
     }
 
-    /** Ikili govdeyi bozmamak icin bayt bayt satir okur. */
+    /** Reads a line byte by byte so that a binary body is not corrupted. */
     private fun readLine(input: InputStream): String? {
         val buf = ByteArrayOutputStream()
         while (true) {

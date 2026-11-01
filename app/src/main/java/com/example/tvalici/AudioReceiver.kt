@@ -17,14 +17,14 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.concurrent.thread
 
 /**
- * Ekran yansitma sesi. Paket bicimi UxPlay'in raop_buffer.c / raop_rtp.c dosyalarindan:
- *  - UDP, 12 baytlik RTP basligi + yuk
- *  - yukun tam 16 baytlik bloklari AES-128-CBC ile sifreli (her paketin IV'si ayni, eiv),
- *    kalan kuyruk bayt sifresiz
- *  - ct=8: AAC-ELD 44100 Hz stereo (yansitma), ct=4: AAC-LC, ct=2: ALAC (Muzik vb. yalnizca ses;
- *    AlacDecoder ile cozulur, cikis tamponu ve on tamponlama daha buyuktur)
- * Ses MediaCodec ile cozulup AudioTrack ile calinir. Kayip paket istegi (resend) yok. Goruntu ile
- * senkron SyncSettings'teki elle ayarlanan kaydirma ile yapilir (TV'de SAG/SOL tuslari).
+ * Screen mirroring audio. The packet format comes from UxPlay's raop_buffer.c / raop_rtp.c:
+ *  - UDP, 12-byte RTP header + payload
+ *  - the payload's full 16-byte blocks are encrypted with AES-128-CBC (every packet has the same IV, eiv),
+ *    the remaining tail bytes are unencrypted
+ *  - ct=8: AAC-ELD 44100 Hz stereo (mirroring), ct=4: AAC-LC, ct=2: ALAC (audio only, e.g. Music;
+ *    decoded with AlacDecoder, with a larger output buffer and pre-buffering)
+ * Audio is decoded with MediaCodec and played with AudioTrack. Lost packets are not re-requested (no resend).
+ * Sync with the picture is done with the manually adjusted offset in SyncSettings (LEFT/RIGHT keys on the TV).
  */
 class AudioReceiver(
     aesKey: ByteArray,
@@ -50,12 +50,12 @@ class AudioReceiver(
     @Volatile
     private var lastSeq = -1
     private var packets = 0
-    private var lostPackets = 0 // sira numarasi atlayan (gelmeyen) paketler
+    private var lostPackets = 0 // packets with skipped (missing) sequence numbers
     private var alacErrors = 0
-    private var latePackets = 0 // tekrar ya da gec gelen paketler
+    private var latePackets = 0 // repeated or late packets
     private var ptsUs = 0L
 
-    // Ses/goruntu ayari: ses gecikmesi sessizlik yazarak artirilir, ornek atlayarak azaltilir.
+    // Audio/video offset: audio delay is increased by writing silence and decreased by skipping samples.
     @Volatile
     private var outRate = 44100
 
@@ -64,25 +64,25 @@ class AudioReceiver(
     private var appliedDelayMs = 0
     private var skipBytes = 0
 
-    // ALAC (yalnizca ses) yolu: cozulen PCM bir kuyruga konur, ayri bir is parcacigi AudioTrack'e yazar.
+    // ALAC (audio-only) path: decoded PCM is put on a queue and a separate thread writes it to the AudioTrack.
     @Volatile
     private var alac: AlacDecoder? = null
     private val alacPcm = ByteArray(AlacDecoder.MAX_PCM_BYTES)
-    private val pcmQueue = LinkedBlockingQueue<ByteArray>(512) // yaklasik 4 sn
+    private val pcmQueue = LinkedBlockingQueue<ByteArray>(512) // about 4 s
 
     @Volatile
     private var flushRequested = false
 
-    /** Ses akisini baslatir. Codec desteklenmiyorsa false doner (ses yok sayilir). */
+    /** Starts the audio stream. Returns false if the codec is not supported (the audio is ignored). */
     fun start(): Boolean {
         if (ct == 2) return startAlac()
         val config: Pair<ByteArray, Int> = when (ct) {
-            // AudioSpecificConfig: ELD (tur 39), 44100 Hz, stereo
+            // AudioSpecificConfig: ELD (type 39), 44100 Hz, stereo
             8 -> byteArrayOf(0xF8.toByte(), 0xE8.toByte(), 0x50, 0x00) to 39
             // AAC-LC, 44100 Hz, stereo
             4 -> byteArrayOf(0x12, 0x10) to 2
             else -> {
-                log("Ses türü desteklenmiyor (ct=$ct)")
+                log("Audio type not supported (ct=$ct)")
                 return false
             }
         }
@@ -96,20 +96,20 @@ class AudioReceiver(
             codec = c
             startDrain(c)
         } catch (e: Exception) {
-            log("Ses çözücüsü kurulamadı: ${e.javaClass.simpleName} ${e.message}")
+            log("Could not set up the audio decoder: ${e.javaClass.simpleName} ${e.message}")
             releaseAll()
             return false
         }
         thread(name = "audio-recv", isDaemon = true) { receiveLoop() }
         thread(name = "audio-ctrl", isDaemon = true) { drainControl() }
-        log("Ses hazır (ct=$ct)")
+        log("Audio ready (ct=$ct)")
         return true
     }
 
     private fun startAlac(): Boolean {
         val d = AlacDecoder.create()
         if (d == null) {
-            log("ALAC çözücüsü yüklenemedi, ses yok sayılıyor")
+            log("Could not load the ALAC decoder, audio ignored")
             return false
         }
         alac = d
@@ -120,11 +120,11 @@ class AudioReceiver(
         thread(name = "audio-recv", isDaemon = true) { receiveLoop() }
         thread(name = "audio-ctrl", isDaemon = true) { drainControl() }
         thread(name = "audio-alac-out", isDaemon = true) { alacWriteLoop() }
-        log("Ses hazır (ALAC, yalnızca ses)")
+        log("Audio ready (ALAC, audio only)")
         return true
     }
 
-    /** Muzik icin genis tampon (~600 ms): gecikme onemli degil, Wi-Fi titremesi gizlenir. */
+    /** A wide buffer for music (~600 ms): latency does not matter, and Wi-Fi jitter is hidden. */
     private fun createAlacTrack(): Boolean {
         return try {
             outRate = 44100
@@ -150,17 +150,17 @@ class AudioReceiver(
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
             t.setVolume(gain)
-            // play() on tamponlama dolunca cagrilir (alacWriteLoop).
+            // play() is called when the pre-buffering is full (alacWriteLoop).
             track = t
-            log("Ses çıkışı (ALAC): 44100 Hz, 2 kanal, tampon ${bufBytes / 4 * 1000 / 44100} ms")
+            log("Audio output (ALAC): 44100 Hz, 2 channels, buffer ${bufBytes / 4 * 1000 / 44100} ms")
             true
         } catch (e: Exception) {
-            log("AudioTrack kurulamadı: ${e.javaClass.simpleName} ${e.message}")
+            log("Could not set up AudioTrack: ${e.javaClass.simpleName} ${e.message}")
             false
         }
     }
 
-    /** Kuyruktaki PCM'i AudioTrack'e yazar; yeterli veri birikince calmaya baslar. */
+    /** Writes the queued PCM to the AudioTrack; starts playing once enough data has accumulated. */
     private fun alacWriteLoop() {
         var written = 0
         var prebuffering = true
@@ -182,7 +182,7 @@ class AudioReceiver(
                     }
                 }
             } catch (e: Exception) {
-                break // AudioTrack kapatildi
+                break // AudioTrack was closed
             }
         }
     }
@@ -195,13 +195,13 @@ class AudioReceiver(
                 data.receive(pkt)
                 handlePacket(buf, pkt.length)
             } catch (e: Exception) {
-                if (running) log("Ses alma hatası: ${e.javaClass.simpleName} ${e.message}")
+                if (running) log("Audio receive error: ${e.javaClass.simpleName} ${e.message}")
                 break
             }
         }
     }
 
-    /** Kontrol portuna gelen senkron paketlerini okuyup atar (yanit gerekmiyor). */
+    /** Reads and discards the sync packets arriving on the control port (no reply is needed). */
     private fun drainControl() {
         val buf = ByteArray(2048)
         while (running) {
@@ -214,12 +214,12 @@ class AudioReceiver(
     }
 
     private fun handlePacket(p: ByteArray, len: Int) {
-        if (len <= 12) return // zaman senkronundan once bos paketler gelir
+        if (len <= 12) return // empty packets arrive before time sync
         val seq = ((p[2].toInt() and 0xff) shl 8) or (p[3].toInt() and 0xff)
         if (lastSeq >= 0) {
-            val diff = ((seq - lastSeq) shl 16) shr 16 // 16 bit tasmayi dogru isle
+            val diff = ((seq - lastSeq) shl 16) shr 16 // handle 16-bit overflow correctly
             if (diff <= 0) {
-                latePackets++ // tekrar ya da gec gelen paket
+                latePackets++ // repeated or late packet
                 return
             }
             if (diff > 1) lostPackets += diff - 1
@@ -235,18 +235,18 @@ class AudioReceiver(
                 cbc.doFinal(p, 12, enc, out, 0)
             }
         } catch (e: Exception) {
-            log("Ses şifresi çözülemedi: ${e.message}")
+            log("Could not decrypt the audio: ${e.message}")
             return
         }
         System.arraycopy(p, 12 + enc, out, enc, size - enc)
 
         packets++
         if (packets == 1) {
-            log("İlk ses paketi: ${size} B, ilk bayt ${"%02x".format(out[0])}")
+            log("First audio packet: ${size} B, first byte ${"%02x".format(out[0])}")
         }
         if (packets % 1000 == 0) {
             val total = packets + lostPackets
-            log("Ses: $packets paket alındı, $lostPackets kayıp (%${"%.2f".format(lostPackets * 100.0 / total)}), $latePackets geç/tekrar")
+            log("Audio: $packets packets received, $lostPackets lost (%${"%.2f".format(lostPackets * 100.0 / total)}), $latePackets late/repeated")
         }
         feed(out, size)
     }
@@ -257,12 +257,12 @@ class AudioReceiver(
             val n = a.decode(frame, size, alacPcm)
             if (n <= 0) {
                 alacErrors++
-                if (alacErrors == 1 || alacErrors % 200 == 0) log("ALAC kare çözülemedi ($alacErrors)")
+                if (alacErrors == 1 || alacErrors % 200 == 0) log("Could not decode ALAC frame ($alacErrors)")
                 return
             }
             val pcm = alacPcm.copyOf(n)
             if (!pcmQueue.offer(pcm)) {
-                pcmQueue.poll() // yazici yetisemiyor: en eski kareyi at
+                pcmQueue.poll() // the writer cannot keep up: drop the oldest frame
                 pcmQueue.offer(pcm)
             }
             return
@@ -278,10 +278,10 @@ class AudioReceiver(
                 return
             }
             buf.put(frame, 0, size)
-            ptsUs += 10_884L // 480 ornek / 44100 Hz
+            ptsUs += 10_884L // 480 samples / 44100 Hz
             c.queueInputBuffer(idx, 0, size, ptsUs, 0)
         } catch (e: Exception) {
-            if (running) log("Ses çözücü hatası: ${e.javaClass.simpleName} ${e.message}")
+            if (running) log("Audio decoder error: ${e.javaClass.simpleName} ${e.message}")
         }
     }
 
@@ -313,13 +313,13 @@ class AudioReceiver(
                         i == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> createTrack(c.outputFormat)
                     }
                 } catch (e: Exception) {
-                    break // codec kapatildi
+                    break // codec was closed
                 }
             }
         }
     }
 
-    /** SyncSettings'teki ses gecikmesi degistiyse sessizlik ekler ya da kisa bir kismi atlar. */
+    /** If the audio delay in SyncSettings changed, adds silence or skips a short part. */
     private fun applyDelay(t: AudioTrack) {
         val want = SyncSettings.audioDelayMs
         if (want == appliedDelayMs) return
@@ -368,13 +368,13 @@ class AudioReceiver(
             t.play()
             track?.release()
             track = t
-            log("Ses çıkışı: ${rate} Hz, $channels kanal")
+            log("Audio output: ${rate} Hz, $channels channels")
         } catch (e: Exception) {
-            log("AudioTrack kurulamadı: ${e.javaClass.simpleName} ${e.message}")
+            log("Could not set up AudioTrack: ${e.javaClass.simpleName} ${e.message}")
         }
     }
 
-    /** AirPlay ses seviyesi dB cinsinden gelir: -144 sessiz, -30 ... 0 aralik. */
+    /** The AirPlay volume comes in dB: -144 is silent, the range is -30 ... 0. */
     fun setVolumeDb(db: Float) {
         gain = when {
             db <= -144f || db <= -30f -> 0f
@@ -384,13 +384,13 @@ class AudioReceiver(
         try {
             track?.setVolume(gain)
         } catch (e: Exception) {
-            // onemsiz
+            // unimportant
         }
     }
 
-    /** Arabellegi bosaltir (FLUSH istegi). */
+    /** Empties the buffer (FLUSH request). */
     fun flush() {
-        lastSeq = -1 // FLUSH'tan sonra sira numarasi yeniden baslayabilir
+        lastSeq = -1 // after FLUSH the sequence number may restart
         if (alac != null) {
             flushRequested = true
             pcmQueue.clear()
@@ -398,7 +398,7 @@ class AudioReceiver(
                 track?.pause()
                 track?.flush()
             } catch (e: Exception) {
-                // onemsiz
+                // unimportant
             }
             return
         }
@@ -406,10 +406,10 @@ class AudioReceiver(
             track?.pause()
             track?.flush()
             track?.play()
-            appliedDelayMs = 0 // bosalan arabellekle birlikte eklenen sessizlik de gitti
+            appliedDelayMs = 0 // the silence added together with the emptied buffer is gone too
             skipBytes = 0
         } catch (e: Exception) {
-            // onemsiz
+            // unimportant
         }
     }
 

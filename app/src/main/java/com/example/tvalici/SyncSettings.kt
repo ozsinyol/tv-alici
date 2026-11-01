@@ -1,17 +1,17 @@
 package com.example.tvalici
 
 /**
- * Ses/goruntu kaydirma ayari (milisaniye). Pozitif: goruntu gecikir (ses goruntuden GEC geliyorsa),
- * negatif: ses gecikir (ses goruntuden ERKEN geliyorsa). TV'de yansitma sirasinda SAG/SOL tuslariyla
- * 20 ms'lik adimlarla degistirilir ve saklanir.
+ * Audio/video offset setting (milliseconds). Positive: the picture is delayed (if the audio arrives LATE relative to the picture),
+ * negative: the audio is delayed (if the audio arrives EARLY relative to the picture). While mirroring on the TV it is changed
+ * in 20 ms steps with the RIGHT/LEFT keys and is saved.
  */
 object SyncSettings {
     const val MAX_MS = 500
     const val STEP_MS = 20
 
     /**
-     * Goruntu tamponu (ag titremesini yumusatir). jitterBufferMs: AUTO (-1) = otomatik, 0 = kapali, >0 = elle (ms).
-     * Elle ayar YUKARI/ASAGI ile 20 ms'lik adimlarla, OK tusu otomatige doner.
+     * Video buffer (smooths network jitter). jitterBufferMs: AUTO (-1) = automatic, 0 = off, >0 = manual (ms).
+     * Manual adjustment is in 20 ms steps with UP/DOWN, and the OK key returns to automatic.
      */
     const val AUTO = -1
     const val MAX_JITTER_MS = 200
@@ -22,18 +22,18 @@ object SyncSettings {
     @Volatile
     var offsetMs = 0
 
-    /** Yapilandirilan tampon: AUTO, 0 (kapali) ya da elle ms. */
+    /** The configured buffer: AUTO, 0 (off) or manual ms. */
     @Volatile
     var jitterBufferMs = AUTO
 
-    /** Otomatik kipte alicinin olctugu titremeye gore ayarladigi guncel tampon (ms). */
+    /** In automatic mode, the current buffer the receiver sets according to the jitter it measures (ms). */
     @Volatile
     var autoJitterMs = AUTO_START_MS
 
-    /** Gercekte uygulanan tampon (ms). */
+    /** The buffer actually applied (ms). */
     val effectiveJitterMs: Int get() = if (jitterBufferMs < 0) autoJitterMs else jitterBufferMs
 
-    /** Yansitma akarken true. Tampon goruntuyu geciktirdigi icin ses de ayni miktar geciktirilir (senkron bozulmasin). */
+    /** True while mirroring is live. Because the buffer delays the picture, the audio is delayed by the same amount (so sync is not broken). */
     @Volatile
     var mirrorLive = false
 
@@ -43,7 +43,7 @@ object SyncSettings {
     val audioDelayMs: Int get() = maxOf(-offsetMs, 0) + activeJitterMs
 }
 
-/** Yansitma istatistikleri (TV menusundeki "Istatistikler" paneli icin). */
+/** Mirroring statistics (for the "Statistics" panel in the TV menu). */
 object MirrorStats {
     @Volatile
     var frames = 0L

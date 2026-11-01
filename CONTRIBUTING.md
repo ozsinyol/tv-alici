@@ -42,7 +42,7 @@ The app UI and the web page use the same 12 languages.
 - There are no automated tests; CI only checks that the app builds, the signing fingerprint matches and the APK is not debuggable. Please test on a real device when you change networking, decoding or key handling.
 - Do not change `UPDATE_CERT_SHA256` in `app/build.gradle.kts` unless you are rotating the signing key: devices only accept updates signed with the pinned certificate.
 - Add the new strings to all language files and update the README if behaviour changes.
-- The developer log (`appendLog`) and most code comments are in Turkish; new comments may be Turkish or English.
+- The developer log (`appendLog`/`log`) and the code comments are in **English**; please write new ones in English. Turkish text belongs only in `values-tr/strings.xml`, the Turkish block of the `DIL` table in `VideoServer.kt`, and `README.tr.md`.
 
 ## License
 

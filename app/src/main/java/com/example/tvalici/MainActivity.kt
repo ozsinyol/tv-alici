@@ -55,7 +55,7 @@ import java.security.SecureRandom
 @Suppress("UnsafeOptInUsageError")
 class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
-    /** Her uygulama acilisinda yeni 4 haneli PIN; QR'a gomulu oldugu icin elle girmek gerekmez. */
+    /** A new 4-digit PIN every time the app starts; it is embedded in the QR code, so it need not be typed by hand. */
     private val pin = "%04d".format(SecureRandom().nextInt(10000))
 
     private var player: ExoPlayer? = null
@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private var airplayServer: AirPlayServer? = null
     private var airplayAdvertiser: AirPlayAdvertiser? = null
 
-    // Ekran yansitma: MediaCodec bu yuzeye cizer.
+    // Screen mirroring: MediaCodec draws onto this surface.
     private lateinit var rootLayout: FrameLayout
     private lateinit var mirrorView: SurfaceView
 
@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         override fun mirrorStopped() {
             mirrorActive = false
             runOnUiThread {
-                // mirrorSize ile ayni kuyrukta oldugu icin, bitmis bir yansitmanin boyutu geri yazilamaz.
+                // Because this is in the same queue as mirrorSize, the size of a finished mirroring session cannot be written back.
                 lastMirrorW = 0
                 lastMirrorH = 0
                 mirrorZoom = 1f
@@ -154,7 +154,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var baseLabel = ""
 
-    // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
+    // Video AirPlay (/play): the player state is updated from the main thread and the server reads it.
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
@@ -185,7 +185,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             .getInt("jitterBufferMs", SyncSettings.AUTO).coerceIn(SyncSettings.AUTO, SyncSettings.MAX_JITTER_MS)
 
         val playerView = PlayerView(this)
-        // Video AirPlay (/play): varsayilan 2,5 sn / 5 sn yerine daha erken baslat ve takilma sonrasi daha cabuk devam et.
+        // Video AirPlay (/play): start earlier and resume sooner after a stall than the default 2.5 s / 5 s.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(15_000, 50_000, 1_000, 2_500)
             .build()
@@ -193,7 +193,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             playerView.player = p
             p.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    appendLog("Oynatma hatası: ${error.errorCodeName}")
+                    appendLog("Playback error: ${error.errorCodeName}")
                     overlayView.visibility = android.view.View.VISIBLE
                     if (airplayVideoActive) endAirplayVideo()
                 }
@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
 
         mirrorView = SurfaceView(this).apply {
-            setZOrderMediaOverlay(true) // ExoPlayer yuzeyinin ustunde cizilsin
+            setZOrderMediaOverlay(true) // draw on top of the ExoPlayer surface
             holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(h: SurfaceHolder) {
                     mirrorSurface = h.surface
@@ -315,7 +315,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             visibility = android.view.View.GONE
         }
         rootLayout = FrameLayout(this).apply {
-            // PlayerView/denetleyici gibi gorunumler odak alip orta (OK) tusunu yutmasin.
+            // Views like PlayerView/controller should not take focus and swallow the center (OK) key.
             descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
             addView(playerView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(
@@ -335,14 +335,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
-        // Ekran doner ya da yerlesim degisirse (configChanges oldugu icin Activity yeniden olusmaz) yansitmayi yeniden sigdir.
+        // If the screen rotates or the layout changes (the Activity is not recreated because of configChanges), fit the mirror again.
         rootLayout.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
             if ((r - l != oldR - oldL || b - t != oldB - oldT) && lastMirrorW > 0 && lastMirrorH > 0) {
                 fitMirror(lastMirrorW, lastMirrorH)
             }
         }
 
-        // Onceki oturumdan kalan yuklenmis videolar (GB'larca yer tutabilir) sunucu baslamadan silinir.
+        // Uploaded videos left over from the previous session (they can take GBs) are deleted before the server starts.
         cacheDir.listFiles()?.forEach { f -> if (f.name.startsWith("video_")) runCatching { f.delete() } }
 
         try {
@@ -360,7 +360,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { statusJson }
             ).also { it.start() }
         } catch (e: Exception) {
-            appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
+            appendLog("Web server did not start (port $port): ${e.message}")
         }
 
         try {
@@ -370,17 +370,17 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             airplayAdvertiser = AirPlayAdvertiser(this, airplayInfo, airplayPort) { msg -> appendLog(msg) }
                 .also { it.start() }
         } catch (e: Exception) {
-            appendLog("AirPlay başlamadı: ${e.message}")
+            appendLog("AirPlay did not start: ${e.message}")
         }
 
         startAirPlayService()
         mainHandler.post(statusTicker)
         watchNetwork()
-        appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
+        appendLog("Version v${BuildConfig.VERSION_CODE}")
         updater.check()
     }
 
-    // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
+    // ---- VideoEvents (iPhone Photos > AirPlay > video) -------------------------------
 
     override fun deviceConnected(name: String?, ip: String) {
         runOnUiThread {
@@ -429,7 +429,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    // ---- Ses odagi ve kilitler: akis surerken CPU/Wi-Fi uyumasin, baska uygulamalarin sesi kissin ----
+    // ---- Audio focus and locks: keep the CPU/Wi-Fi awake while streaming, and lower other apps' sound ----
 
     private var focusRequest: AudioFocusRequest? = null
     private var audioStreaming = false
@@ -456,7 +456,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                             .build()
                     )
-                    .setOnAudioFocusChangeListener { change -> appendLog("Ses odağı değişti: $change") }
+                    .setOnAudioFocusChangeListener { change -> appendLog("Audio focus changed: $change") }
                     .build().also { focusRequest = it }
                 am.requestAudioFocus(req)
             } else {
@@ -464,7 +464,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
             }
         } catch (e: Exception) {
-            appendLog("Ses odağı alınamadı: ${e.message}")
+            appendLog("Could not get audio focus: ${e.message}")
         }
     }
 
@@ -478,11 +478,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 am.abandonAudioFocus(null)
             }
         } catch (e: Exception) {
-            // zaten birakilmis
+            // already released
         }
     }
 
-    /** Ses ya da yansitma suruyorsa CPU ve Wi-Fi kilitlerini tutar, bitince birakir. */
+    /** Holds the CPU and Wi-Fi locks while audio or mirroring is running, and releases them when it ends. */
     private fun syncStreamLocks() {
         val need = audioStreaming || mirrorActive
         try {
@@ -499,7 +499,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                     wifiLock = wm?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "tvalici:stream")
                         ?.apply { setReferenceCounted(false) }
                 }
-                // Ust sinirli: unutulursa pil bitmesin. 6 saat dolarsa kilit kendiliginden birakilir; akis suruyorsa bir sonraki ses/yansitma durum degisiminde yeniden alinir.
+                // Upper bound so the battery is not drained if forgotten. After 6 hours the lock is released automatically; if streaming continues, it is re-acquired at the next audio/mirroring state change.
                 if (wakeLock?.isHeld != true) wakeLock?.acquire(6 * 60 * 60 * 1000L)
                 if (wifiLock?.isHeld != true) wifiLock?.acquire()
             } else {
@@ -507,7 +507,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 if (wifiLock?.isHeld == true) wifiLock?.release()
             }
         } catch (e: Exception) {
-            appendLog("Kilit hatası: ${e.message}")
+            appendLog("Lock error: ${e.message}")
         }
     }
 
@@ -530,7 +530,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun videoPlay(url: String, startSeconds: Double, startFraction: Double) {
         runOnUiThread {
             val p = player ?: return@runOnUiThread
-            // Yansitma yuzeyi eski kareyi tutabilir: videoyu kapatmasin diye 1x1'e kucult.
+            // The mirroring surface may hold an old frame: shrink it to 1x1 so it does not cover the video.
             mirrorView.layoutParams = FrameLayout.LayoutParams(1, 1, Gravity.CENTER)
             photoView.visibility = android.view.View.GONE
             overlayView.visibility = android.view.View.GONE
@@ -544,7 +544,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             p.setMediaItem(item)
             p.prepare()
             p.playWhenReady = true
-            appendLog("Video yükleniyor")
+            appendLog("Loading video")
             reportVideoState("loading")
             mainHandler.removeCallbacks(snapshotTicker)
             mainHandler.post(snapshotTicker)
@@ -581,7 +581,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun showPhoto(jpeg: ByteArray) {
         val bmp = decodeScaled(jpeg)
         if (bmp == null) {
-            appendLog("Fotoğraf çözülemedi (${jpeg.size} B)")
+            appendLog("Could not decode the photo (${jpeg.size} B)")
             return
         }
         runOnUiThread {
@@ -591,11 +591,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             photoView.setImageBitmap(bmp)
             photoView.visibility = android.view.View.VISIBLE
             overlayView.visibility = android.view.View.GONE
-            appendLog("Fotoğraf gösteriliyor ${bmp.width}x${bmp.height}")
+            appendLog("Showing photo ${bmp.width}x${bmp.height}")
         }
     }
 
-    /** Buyuk fotograflar bellegi tasirmasin diye en uzun kenar ~2560 pikseli gecmeyecek sekilde acilir. */
+    /** Large photos are decoded so that the longest side does not exceed ~2560 pixels, to avoid exhausting memory. */
     private fun decodeScaled(data: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
@@ -624,7 +624,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         videoSnapshot = VideoInfo()
     }
 
-    /** Ana is parcacigindan cagrilir; sunucu is parcaciklari bu kopyayi okur. */
+    /** Called from the main thread; the server threads read this copy. */
     private fun updateSnapshot() {
         val p = player
         if (p == null || !airplayVideoActive) {
@@ -642,11 +642,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         )
     }
 
-    /** Yansitilan goruntuyu en-boy oranini bozmadan ekrana sigdirir (kenarlarda siyah bosluk). */
+    /** Fits the mirrored picture to the screen without distorting its aspect ratio (black bars at the edges). */
     private var lastMirrorW = 0
     private var lastMirrorH = 0
 
-    // Yansitma yakinlastirma: 1x = ekrana sigdir; buyudukce goruntu ekrandan tasar ve kaydirilabilir.
+    // Zoom while mirroring: 1x = fit to the screen; as it grows, the picture overflows the screen and can be dragged.
     private var mirrorZoom = 1f
     private var panX = 0f
     private var panY = 0f
@@ -692,7 +692,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private var touchX = 0f
     private var touchY = 0f
 
-    /** Yansitma sirasinda iki parmakla yakinlastirma, yakinlasinca tek parmakla kaydirma. */
+    /** Pinch with two fingers to zoom while mirroring; once zoomed in, drag with one finger. */
     private fun mirrorTouch(ev: MotionEvent) {
         scaleDetector.onTouchEvent(ev)
         when (ev.actionMasked) {
@@ -708,7 +708,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 fitMirror(lastMirrorW, lastMirrorH)
             }
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
-                // Parmak kalkinca kalan parmagin konumundan devam et (ani siçrama olmasin).
+                // When a finger is lifted, continue from the remaining finger's position (so there is no sudden jump).
                 val i = if (ev.actionIndex == 0) 1 else 0
                 if (ev.pointerCount > 1) {
                     touchX = ev.getX(i)
@@ -718,27 +718,27 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    /** Gunluk yalnizca bellekte tutulur; /log sayfasindan okunur, TV ekraninda gosterilmez. */
+    /** The log is kept in memory only; it is read from the /log page and is not shown on the TV screen. */
     private fun appendLog(msg: String) {
         Log.i("AirPlay", msg)
         LogBuffer.add(msg)
     }
 
-    /** Bilinmeyen bir cihaz baglanmak isteyince TV'de izin penceresi acar. */
-    /** Web arayuzunden yuklenen APK'yi dogrular; sorun yoksa kurulum ekranini acar. null = tamam. */
+    /** Opens the permission dialog on the TV when an unknown device tries to connect. */
+    /** Verifies the APK uploaded from the web interface; if there is no problem, opens the install screen. null = OK. */
     private fun acceptApk(file: java.io.File): String? {
         val problem = updater.verifyUpload(file)
         if (problem != null) {
-            appendLog("APK reddedildi: $problem")
+            appendLog("APK rejected: $problem")
             return problem
         }
         val needsPermission = android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()
         runOnUiThread { updater.install(file) }
         if (needsPermission) {
-            appendLog("APK kurulumu için 'bilinmeyen kaynaklar' izni gerekli")
+            appendLog("The 'unknown sources' permission is required to install the APK")
             return getString(R.string.unknown_sources_web)
         }
-        appendLog("APK alındı, kurulum ekranı açılıyor")
+        appendLog("APK received, opening the install screen")
         return null
     }
 
@@ -757,8 +757,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return { runOnUiThread { dialog?.dismiss() } }
     }
 
-    /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
-    // ---- TV menusu: MENU tusu ya da QR/yansitma ekraninda OK ile acilir (Mi TV Stick'te MENU tusu yok) ----
+    /** Starts playback before the upload finishes: the file is read as it grows. */
+    // ---- TV menu: opened with the MENU key, or with OK on the QR/mirroring screen (the Mi TV Stick has no MENU key) ----
 
     private class MenuItem(
         val label: Int,
@@ -770,7 +770,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     )
 
     private var menuOpen = false
-    private var menuTrusted = false // true: "Guvenilen cihazlar" alt menusu
+    private var menuTrusted = false // true: the "Trusted devices" submenu
     private var menuIndex = 0
     private val menuHide = Runnable { closeMenu() }
 
@@ -781,10 +781,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(28, 28, 30))
             setPadding(dp(24), dp(20), dp(24), dp(16))
-            isClickable = true // kutunun ici arkadaki "disari tikla = kapat" katmanina gitmesin
+            isClickable = true // the inside of the box should not pass clicks to the "tap outside = close" layer behind it
         }
     }
-    // Kucuk ekranlarda (yatay telefon) satirlar sigmazsa menu kaydirilir; secili satir gorunur tutulur.
+    // On small screens (a phone in landscape) the menu scrolls if the rows do not fit; the selected row is kept visible.
     private val menuScroll: ScrollView by lazy {
         ScrollView(this).apply {
             isFillViewport = false
@@ -828,14 +828,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         else -> "${SyncSettings.jitterBufferMs} ms"
     }
 
-    // Uyku zamanlayicisi: secilen sure sonunda oynatma/yansitma durdurulur (yalnizca bu oturumda gecerli).
+    // Sleep timer: when the chosen time is up, playback/mirroring is stopped (valid for this session only).
     private val sleepOptions = intArrayOf(0, 15, 30, 60, 90, 120)
     private var sleepIndex = 0
     private var sleepDeadline = 0L
     private val sleepRunnable = Runnable {
         sleepIndex = 0
         sleepDeadline = 0L
-        appendLog("Uyku zamanlayıcısı doldu, oynatma durduruldu")
+        appendLog("Sleep timer expired, playback stopped")
         stopPlayback()
         Toast.makeText(this, getString(R.string.sleep_stopped), Toast.LENGTH_LONG).show()
     }
@@ -880,7 +880,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    /** "Guvenilen cihazlar" alt menusu: OK ile secili cihazin guveni kaldirilir. */
+    /** The "Trusted devices" submenu: OK on a row removes that device's trust. */
     private fun trustedItems(): List<MenuItem> {
         val list = mutableListOf<MenuItem>()
         val devices = approvals.trustedList()
@@ -979,7 +979,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 setPadding(dp(14), dp(12), dp(14), dp(12))
                 setBackgroundColor(if (i == menuIndex) Color.rgb(0, 102, 214) else Color.TRANSPARENT)
                 isClickable = true
-                // Dokunma: secili satirin "tamam" eylemi; uzun basma: azalt.
+                // Tap: the selected row's "OK" action; long press: decrease.
                 setOnClickListener {
                     menuIndex = i
                     item.ok()
@@ -1038,7 +1038,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         menuLayer.visibility = android.view.View.GONE
     }
 
-    /** Menu aciksa tuslari menu yonetir; ilgilenmedigi tuslar (ses vb.) sisteme birakilir (false). */
+    /** While the menu is open it handles the keys; keys it does not care about (volume etc.) are left to the system (false). */
     private fun menuKey(keyCode: Int, event: KeyEvent): Boolean {
         val items = menuItems()
         scheduleMenuClose()
@@ -1055,7 +1055,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return true
     }
 
-    /** Web sayfasindan gelen mesaji ekranda 20 sn buyuk yazi olarak gosterir (bos metin kaldirir). */
+    /** Shows the message from the web page on screen in large text for 20 s (an empty text removes it). */
     private fun say(text: String) {
         mainHandler.removeCallbacks(hideSay)
         if (text.isEmpty()) {
@@ -1065,10 +1065,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         sayView.text = text
         sayView.visibility = android.view.View.VISIBLE
         mainHandler.postDelayed(hideSay, 20_000L)
-        appendLog("Mesaj gösterildi")
+        appendLog("Message shown")
     }
 
-    // ---- Bosta kalinca zıplayan QR (DVD logosu gibi; ekran yanmasini da onler) ---------------
+    // ---- Bouncing QR when idle (like the DVD logo; also prevents screen burn-in) ---------------
 
     private var idleSince = SystemClock.elapsedRealtime()
     private var bouncing = false
@@ -1141,7 +1141,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return super.dispatchTouchEvent(ev)
     }
 
-    // ---- "Simdi caliyor": muzikte tam ekran kapak + sarki bilgisi (Geri tusu QR ekranina doner) ----
+    // ---- "Now playing": full-screen cover art + song information for music (Back returns to the QR screen) ----
 
     private var npDismissed = false
     private var lastArt: Bitmap? = null
@@ -1210,7 +1210,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             npArt.layoutParams = LinearLayout.LayoutParams(side, side)
             npArt.setImageBitmap(art)
             npArt.visibility = android.view.View.VISIBLE
-            // Kucuk bir kopyayi buyutmek, ucuz bir bulaniklastirma (arka plan) verir.
+            // Enlarging a small copy gives a cheap blur (for the background).
             npBackdrop.setImageBitmap(Bitmap.createScaledBitmap(art, 16, 16, true))
         } else {
             npArt.visibility = android.view.View.GONE
@@ -1219,7 +1219,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         nowPlayingView.visibility = android.view.View.VISIBLE
     }
 
-    // ---- /api/status: web kumandasinin "su an oynuyor" bilgisi (saniyede bir, ana is parcacigindan) ----
+    // ---- /api/status: the web remote's "now playing" information (once a second, from the main thread) ----
 
     @Volatile
     private var statusJson = """{"state":"idle"}"""
@@ -1231,7 +1231,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 updateClock()
                 updateStats()
             } catch (e: Exception) {
-                // bir sonraki turda yeniden denenir
+                // will be retried on the next tick
             }
             mainHandler.postDelayed(this, 1000)
         }
@@ -1245,7 +1245,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val now = java.util.Date()
         val t = android.text.format.DateFormat.getTimeFormat(this).format(now)
         val d = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
-        if (clockTime.text.toString() != t) clockTime.text = t // her saniye gereksiz yerlesim olmasin
+        if (clockTime.text.toString() != t) clockTime.text = t // so there is no needless relayout every second
         if (clockDate.text.toString() != d) clockDate.text = d
     }
 
@@ -1280,11 +1280,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         "-"
     }
 
-    /** Menudeki "Istatistikler" acikken sag ustte teknik bilgi paneli (saniyede bir). Tanilama metni dilden bagimsizdir. */
+    /** While "Statistics" is on in the menu, a technical info panel in the top right (once a second). The diagnostic text is language-independent. */
     private fun updateStats() {
         if (!statsOn) {
             statsView.visibility = android.view.View.GONE
-            lastStatsAt = 0L // panel acilinca ilk kare hizi uzun donemin ortalamasi olmasin
+            lastStatsAt = 0L // so the first frame rate after the panel opens is not an average over a long period
             return
         }
         val now = SystemClock.elapsedRealtime()
@@ -1351,15 +1351,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return o.toString()
     }
 
-    // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
+    // The queue of videos uploaded from the web page (those that arrived with X-Queue: 1).
     private val uploadQueue = ArrayDeque<Upload>()
 
-    /** Kuyrugu bosaltir ve bekleyen yuklemelerin dosyalarini siler (onbellek dolmasin). */
+    /** Empties the queue and deletes the files of the waiting uploads (so the cache does not fill up). */
     private fun clearQueue() {
         uploadQueue.forEach { runCatching { it.file.delete() } }
         uploadQueue.clear()
     }
-    private var playingUrl: String? = null // /api/play ile acilan adres (durum kartinda gosterilir)
+    private var playingUrl: String? = null // the address opened with /api/play (shown on the status card)
     private var currentUpload: Upload? = null
 
     private fun play(upload: Upload) {
@@ -1368,7 +1368,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED
         if (upload.queued && busy) {
             uploadQueue.addLast(upload)
-            appendLog("Kuyruğa eklendi (${uploadQueue.size} bekliyor)")
+            appendLog("Added to the queue (${uploadQueue.size} waiting)")
             return
         }
         clearQueue()
@@ -1381,11 +1381,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val old = currentUpload
         start(next)
         if (old != null && old !== next) runCatching { old.file.delete() }
-        appendLog("Sıradaki video (${uploadQueue.size} bekliyor)")
+        appendLog("Next video (${uploadQueue.size} waiting)")
         return true
     }
 
-    /** Web sayfasindan/yer iminden gelen http(s) video adresini ExoPlayer ile oynatir (MP4, HLS ...). */
+    /** Plays an http(s) video address coming from the web page/bookmarklet with ExoPlayer (MP4, HLS ...). */
     private fun playUrl(url: String) {
         val uri = Uri.parse(url)
         if (uri.scheme != "http" && uri.scheme != "https") return
@@ -1402,7 +1402,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             prepare()
             playWhenReady = true
         }
-        appendLog("Bağlantıdan oynatılıyor: $playingUrl")
+        appendLog("Playing from a link: $playingUrl")
     }
 
     private fun start(upload: Upload) {
@@ -1419,7 +1419,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    /** Web sayfasindaki kumanda dugmeleri (her zaman ana is parcacigindan cagrilir). */
+    /** The remote buttons on the web page (always called from the main thread). */
     private fun control(raw: String) {
         val p = player ?: return
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -1464,7 +1464,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    /** Wi-Fi bandi, sinyal ve baglanti hizi gunluge yazilir (titreme teshisi icin). */
+    /** The Wi-Fi band, signal and link speed are written to the log (for diagnosing jitter). */
     private fun logWifi() {
         try {
             val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return
@@ -1475,16 +1475,16 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 f >= 5925 -> "6 GHz"
                 f >= 4900 -> "5 GHz"
                 f > 0 -> "2,4 GHz"
-                else -> "bilinmiyor"
+                else -> "unknown"
             }
-            appendLog("Wi-Fi: $band ($f MHz), sinyal ${i.rssi} dBm, bağlantı hızı ${i.linkSpeed} Mbps")
+            appendLog("Wi-Fi: $band ($f MHz), signal ${i.rssi} dBm, link speed ${i.linkSpeed} Mbps")
         } catch (e: Exception) {
-            appendLog("Wi-Fi bilgisi okunamadı: ${e.javaClass.simpleName}")
+            appendLog("Could not read Wi-Fi information: ${e.javaClass.simpleName}")
         }
     }
 
-    /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
-    /** Tam ekran: durum ve gezinme cubuklari gizlenir (telefonda yansitma tum ekrani kullansin). */
+    /** RIGHT/LEFT while mirroring: adjusts the offset between audio and picture in 20 ms steps. */
+    /** Full screen: the status and navigation bars are hidden (so mirroring uses the whole screen on a phone). */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
@@ -1498,11 +1498,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val wasBouncing = bouncing
         userActivity()
-        // Ziplayan QR'i durduran OK tusu ayri bir islem (otomatik baslatma degisimi) tetiklemesin.
+        // The OK key that stops the bouncing QR should not trigger a separate action (toggling auto-start).
         if (wasBouncing && isOkKey(keyCode)) return true
-        if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
+        if (event.repeatCount == 0) appendLog("Key: ${KeyEvent.keyCodeToString(keyCode)}")
         if (menuOpen) return menuKey(keyCode, event) || super.onKeyDown(keyCode, event)
-        // MENU her zaman menuyu acar; OK da (MENU tusu olmayan kumandalar icin) QR ya da yansitma ekraninda acar.
+        // MENU always opens the menu; OK also opens it (for remotes without a MENU key) on the QR or mirroring screen.
         if (keyCode == KeyEvent.KEYCODE_MENU ||
             (isOkKey(keyCode) && (mirrorActive || overlayView.visibility == android.view.View.VISIBLE))
         ) {
@@ -1510,7 +1510,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             return true
         }
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
-            // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
+            // While on automatic, the first press switches from the current automatic value to manual mode.
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
             val v = (SyncSettings.effectiveJitterMs + step).coerceIn(0, SyncSettings.MAX_JITTER_MS)
             SyncSettings.jitterBufferMs = v
@@ -1561,7 +1561,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putString("serverName", n).apply()
         airplayInfoRef?.name = n
         airplayAdvertiser?.restart()
-        appendLog("AirPlay adı değişti: $n")
+        appendLog("AirPlay name changed: $n")
         runOnUiThread {
             baseLabel = baseLabelText()
             updateAutostartHint()
@@ -1576,7 +1576,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         infoLabel.text = baseLabel + "\n" + getString(R.string.autostart_hint, getString(if (autostartOn()) R.string.on else R.string.off))
     }
 
-    /** Her seyi durdurur ve QR ekranina doner (Geri tusu ve uyku zamanlayicisi kullanir). */
+    /** Stops everything and returns to the QR screen (used by the Back key and the sleep timer). */
     private fun stopPlayback() {
         clearQueue()
         playingUrl = null
@@ -1584,7 +1584,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         photoView.visibility = android.view.View.GONE
         if (airplayVideoActive) endAirplayVideo()
         airplayServer?.stopAllMirrors()
-        // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
+        // stopAllMirrors does not call mirrorStopped(); if the flag is not reset, OK on the QR screen changes the jitter setting.
         mirrorActive = false
         lastMirrorW = 0
         lastMirrorH = 0
@@ -1601,7 +1601,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         overlayView.visibility = android.view.View.VISIBLE
     }
 
-    /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
+    /** When the Back key is pressed, stop playback and return to the QR screen. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (menuOpen) {
@@ -1620,7 +1620,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
-    /** Wi-Fi/DHCP degisince adresi, QR'i ve etiketi tazeler. */
+    /** Refreshes the address, the QR code and the label when Wi-Fi/DHCP changes. */
     private fun watchNetwork() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
         val cb = object : ConnectivityManager.NetworkCallback() {
@@ -1631,7 +1631,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             cm.registerNetworkCallback(NetworkRequest.Builder().build(), cb)
             netCallback = cb
         } catch (e: Exception) {
-            appendLog("Ağ izleme başlatılamadı: ${e.message}")
+            appendLog("Could not start network monitoring: ${e.message}")
         }
     }
 
@@ -1647,17 +1647,17 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             qrView.setImageBitmap(qrBitmap("$url/?pin=$pin", 600))
             baseLabel = baseLabelText()
             updateAutostartHint()
-            appendLog("Adres değişti: $url")
+            appendLog("Address changed: $url")
         }
     }
 
-    /** Surecin arka planda oldurulmemesi icin on plan servisini baslatir (basarisiz olursa uygulama yine calisir). */
+    /** Starts the foreground service so the process is not killed in the background (the app still works if this fails). */
     private fun startAirPlayService() {
         try {
             val i = Intent(this, AirPlayService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
         } catch (e: Exception) {
-            appendLog("Arka plan servisi başlamadı: ${e.message}")
+            appendLog("Could not start the background service: ${e.message}")
         }
     }
 
@@ -1668,7 +1668,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     override fun onStop() {
-        // Arka plandayken zipalayan QR animasyonu (25 uyanma/sn) bosuna calismasin.
+        // While in the background, the bouncing QR animation (25 wake-ups/s) should not run needlessly.
         mainHandler.removeCallbacks(bounceTicker)
         if (bouncing) stopBounce()
         super.onStop()

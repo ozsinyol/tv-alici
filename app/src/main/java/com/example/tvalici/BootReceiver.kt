@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 
-/** TV acilinca uygulamayi baslatir (yalnizca "acilista otomatik baslat" ayari aciksa). */
+/** Starts the app when the TV turns on (only if the "start at boot" setting is on). */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
@@ -14,8 +14,8 @@ class BootReceiver : BroadcastReceiver() {
         try {
             context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
-            // Android 10+ arka plandan ekran acmayi kisitlayabilir.
-            Log.w("TvAlici", "Acilista baslatilamadi: ${e.message}")
+            // Android 10+ may restrict launching a screen from the background.
+            Log.w("TvAlici", "Could not start at boot: ${e.message}")
         }
     }
 }

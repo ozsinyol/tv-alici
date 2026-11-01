@@ -4,12 +4,12 @@ import android.content.SharedPreferences
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** AirPlay baglantisina izin verilip verilmedigini soran kapi (baglanti is parcaciginda bloklar). */
+/** The gate that asks whether an AirPlay connection is allowed (blocks the connection thread). */
 interface ApprovalGate {
     fun check(ip: String): Boolean
 }
 
-/** Guvenilen cihaz listesini yonetme (web sayfasindan). */
+/** Managing the trusted-device list (from the web page). */
 interface TrustAdmin {
     fun trustedList(): List<String>
     fun forget(ip: String)
@@ -17,12 +17,12 @@ interface TrustAdmin {
 }
 
 /**
- * Ayni agdaki herkesin TV'ye baglanmasini engeller: bilinmeyen bir iPhone baglanmak isteyince
- * TV'de "Izin ver / Hep izin ver / Reddet" penceresi cikar. Karar IP adresine baglidir.
+ * Keeps everyone on the same network from connecting to the TV: when an unknown iPhone tries to connect,
+ * an "Allow once / Always allow / Deny" dialog appears on the TV. The decision is tied to the IP address.
  */
 class Approvals(
     private val prefs: SharedPreferences,
-    /** TV'de pencereyi acar; kullanici cevap verince answer cagrilir. Donen islev pencereyi kapatir. */
+    /** Opens the dialog on the TV; answer is called when the user responds. The returned function closes the dialog. */
     private val ask: (ip: String, answer: (Result) -> Unit) -> (() -> Unit),
     private val log: (String) -> Unit
 ) : ApprovalGate, TrustAdmin {
@@ -40,13 +40,13 @@ class Approvals(
     }
 
     private companion object {
-        /** Bu sure hic baglanmayan "hep izin ver" cihazin guveni kendiliginden kalkar. */
+        /** An "always allow" device that does not connect for this long loses its trust automatically. */
         const val TRUST_TTL_MS = 30L * 24 * 60 * 60 * 1000
         const val TOUCH_EVERY_MS = 24L * 60 * 60 * 1000
     }
 
     private val pending = HashMap<String, Pending>()
-    private val allowedNow = HashSet<String>() // bu uygulama acilisinda izin verilenler
+    private val allowedNow = HashSet<String>() // allowed during this app session
     private val deniedUntil = HashMap<String, Long>()
 
     @Synchronized
@@ -78,7 +78,7 @@ class Approvals(
             }
             Result.DENY -> deniedUntil[ip] = System.currentTimeMillis() + 60_000L
         }
-        log("Bağlantı izni $ip: $r")
+        log("Connection permission $ip: $r")
         p.latch.countDown()
     }
 
@@ -86,8 +86,8 @@ class Approvals(
     private fun isAllowed(ip: String): Boolean = ip in allowedNow
 
     /**
-     * Kalici guvenilen IP'ler. Son kullanimi TRUST_TTL_MS'den eski olanlar silinir; zaman damgasi
-     * olmayan (eski surumden kalan) kayitlara simdiki zaman yazilir.
+     * Permanently trusted IPs. Entries whose last use is older than TRUST_TTL_MS are removed; entries
+     * without a timestamp (left over from an older version) get the current time written to them.
      */
     @Synchronized
     private fun trusted(): Set<String> {
@@ -108,7 +108,7 @@ class Approvals(
                 now - t > TRUST_TTL_MS -> {
                     ed.remove("trustedAt_$ip")
                     changed = true
-                    log("Güven süresi doldu: $ip")
+                    log("Trust expired: $ip")
                 }
                 else -> live.add(ip)
             }
@@ -118,7 +118,7 @@ class Approvals(
         return live
     }
 
-    /** Kullanilan guvenilen cihazin damgasini gunde en fazla bir kez tazeler. */
+    /** Refreshes the stamp of a trusted device that is in use, at most once per day. */
     private fun touch(ip: String) {
         val now = System.currentTimeMillis()
         if (now - prefs.getLong("trustedAt_$ip", 0L) > TOUCH_EVERY_MS) {
@@ -126,7 +126,7 @@ class Approvals(
         }
     }
 
-    /** "ip (kalici)" ya da "ip (bu acilista)" bicimli satirlar. */
+    /** Lines formatted as "ip (perm)" or "ip (temp)". */
     @Synchronized
     override fun trustedList(): List<String> {
         val perm = trusted()
@@ -140,7 +140,7 @@ class Approvals(
         prefs.edit().putStringSet("trusted", trusted() - ip).remove("trustedAt_$ip").apply()
         allowedNow.remove(ip)
         deniedUntil.remove(ip)
-        log("Güvenilen cihaz silindi: $ip")
+        log("Trusted device removed: $ip")
     }
 
     @Synchronized
@@ -150,7 +150,7 @@ class Approvals(
         ed.apply()
         allowedNow.clear()
         deniedUntil.clear()
-        log("Tüm güvenilen cihazlar silindi")
+        log("All trusted devices removed")
     }
 
     override fun check(ip: String): Boolean {

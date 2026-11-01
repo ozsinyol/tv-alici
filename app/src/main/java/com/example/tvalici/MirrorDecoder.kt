@@ -6,7 +6,7 @@ import android.view.Surface
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
-/** H.264 karelerini MediaCodec ile cozup dogrudan Surface'e cizer. */
+/** Decodes H.264 frames with MediaCodec and draws them straight onto the Surface. */
 class MirrorDecoder(
     private val surfaceProvider: () -> Surface?,
     private val onSize: (Int, Int) -> Unit,
@@ -19,13 +19,13 @@ class MirrorDecoder(
     private var ptsUs = 0L
     private var dropped = 0
 
-    // Olcum: kare cozucuye girdigi an (pts sirasina gore) saklanir, cikista gecikme hesaplanir.
+    // Measurement: the moment a frame enters the decoder is stored (in pts order), and the delay is computed at the output.
     private val inputNs = LongArray(256)
 
     private val startCode = byteArrayOf(0, 0, 0, 1)
 
-    // Ses/goruntu ayari: kareler geldikleri andan itibaren SyncSettings.videoDelayMs kadar bekletilir.
-    // targetNs: tampon acikken karenin cizilmesi gereken an (0: tampon yok, arrivedNs kullanilir).
+    // Audio/video offset: frames are held for SyncSettings.videoDelayMs from the moment they arrive.
+    // targetNs: the moment the frame should be drawn when the buffer is on (0: no buffer, arrivedNs is used).
     private class Frame(val data: ByteArray, val len: Int, val arrivedNs: Long, val targetNs: Long) {
         val baseNs: Long get() = if (targetNs != 0L && targetNs - arrivedNs <= 500_000_000L) targetNs else arrivedNs
     }
@@ -35,11 +35,11 @@ class MirrorDecoder(
     @Volatile
     private var released = false
 
-    // Birikme sonrasi bir sonraki anahtar kareye (IDR) kadar P kareler atilir (bozuk goruntu yerine kisa donma).
+    // After a backlog, P frames are dropped until the next key frame (IDR) (a short freeze instead of a corrupt picture).
     @Volatile
     private var waitKey = false
 
-    // Cozucu ilk kareyi verene kadar (baslangicta ~0,6 sn) kuyruk dogal olarak birikir; koruma devreye girmez.
+    // Until the decoder outputs its first frame (~0.6 s at startup) the queue naturally builds up; the protection does not kick in.
     @Volatile
     private var outputStarted = false
     private var skipped = 0
@@ -63,7 +63,7 @@ class MirrorDecoder(
         }
     }
 
-    /** SPS/PPS degistiyse (ya da ilk kez geldiyse) cozucuyu yeniden kurar. */
+    /** Re-creates the decoder if SPS/PPS changed (or arrived for the first time). */
     @Synchronized
     fun configure(sps: ByteArray, pps: ByteArray, width: Int, height: Int) {
         if (codec != null &&
@@ -74,16 +74,16 @@ class MirrorDecoder(
         releaseCodec()
         val surface = surfaceProvider()
         if (surface == null || !surface.isValid) {
-            log("Video yüzeyi hazır değil")
+            log("Video surface is not ready")
             return
         }
         try {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height)
             format.setByteBuffer("csd-0", ByteBuffer.wrap(startCode + sps))
             format.setByteBuffer("csd-1", ByteBuffer.wrap(startCode + pps))
-            format.setInteger("low-latency", 1) // eski surumlerde yok sayilir
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0) // gercek zamanli
-            // Cozucuyu tam hizda calistir (gercek zamanli onerisi); dusuk guc/hiz modunda kalmasin.
+            format.setInteger("low-latency", 1) // ignored on older versions
+            format.setInteger(MediaFormat.KEY_PRIORITY, 0) // real-time
+            // Run the decoder at full speed (the real-time hint); it should not stay in a low-power/low-speed mode.
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
             val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             applyVendorLowLatency(format, c.name)
@@ -95,10 +95,10 @@ class MirrorDecoder(
             ptsUs = 0L
             waitKey = false
             outputStarted = false
-            log("Çözücü hazır ${width}x$height")
+            log("Decoder ready ${width}x$height")
             startDrain(c)
         } catch (e: Exception) {
-            log("Çözücü kurulamadı: ${e.javaClass.simpleName} ${e.message}")
+            log("Could not set up the decoder: ${e.javaClass.simpleName} ${e.message}")
             releaseCodec()
         }
     }
@@ -107,8 +107,8 @@ class MirrorDecoder(
         thread(name = "mirror-drain", isDaemon = true) {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
             val info = MediaCodec.BufferInfo()
-            // Cozucu geride kalip iki kare birden hazirsa eskisi cizilmez, yalnizca en yenisi cizilir:
-            // goruntu geri kalan kareleri tek tek oynatarak gecikmeyi korumak yerine yetisir.
+            // If the decoder falls behind and two frames are ready at once, the older one is not drawn, only the newest:
+            // the picture catches up instead of replaying the remaining frames one by one to keep the delay.
             var pending = -1
             var latSumNs = 0L
             var latMaxNs = 0L
@@ -134,21 +134,21 @@ class MirrorDecoder(
                             outCount++
                             if (outCount % 300 == 0) {
                                 log(
-                                    "Çözücü gecikmesi: ort ${latSumNs / 300 / 1_000_000} ms, " +
-                                        "en çok ${latMaxNs / 1_000_000} ms | çıkışta atlanan: $outSkipped, " +
-                                        "girişte atlanan (toplam): $dropped"
+                                    "Decoder latency: avg ${latSumNs / 300 / 1_000_000} ms, " +
+                                        "max ${latMaxNs / 1_000_000} ms | skipped at output: $outSkipped, " +
+                                        "dropped at input (total): $dropped"
                                 )
                                 latSumNs = 0L; latMaxNs = 0L; outSkipped = 0
                             }
                         }
                         i == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> reportSize(c.outputFormat)
                         i == MediaCodec.INFO_TRY_AGAIN_LATER -> if (pending >= 0) {
-                            c.releaseOutputBuffer(pending, true) // hemen ciz
+                            c.releaseOutputBuffer(pending, true) // draw immediately
                             pending = -1
                         }
                     }
                 } catch (e: Exception) {
-                    break // codec kapatildi
+                    break // codec was closed
                 }
             }
         }
@@ -166,15 +166,15 @@ class MirrorDecoder(
             }
             if (w > 0 && h > 0) onSize(w, h)
         } catch (e: Exception) {
-            log("Çıkış boyutu okunamadı: ${e.message}")
+            log("Could not read the output size: ${e.message}")
         }
     }
 
     /**
-     * Annex-B bicimindeki bir kareyi sira ile (gecikme ayarina gore) cozucuye iletir.
-     * [idr]: kare anahtar kare mi. Birikme olursa gecikme buyumesin diye eski kareler atilir:
-     *  - anahtar kare geldiginde (ayar gecikmesi yokken) onundeki bekleyen kareler gereksizdir, referans bozulmaz;
-     *  - birikme sinirini asarsa kuyruk bosaltilir ve sonraki anahtar kareye kadar P kareler beklenmez.
+     * Passes a frame in Annex-B format to the decoder in order (according to the delay setting).
+     * [idr]: whether the frame is a key frame. If a backlog builds up, old frames are dropped so the delay does not grow:
+     *  - when a key frame arrives (with no offset delay), the waiting frames before it are unnecessary and references stay intact;
+     *  - if the backlog exceeds the limit, the queue is emptied and P frames are not waited for until the next key frame.
      */
     fun feed(data: ByteArray, len: Int, idr: Boolean, targetNs: Long) {
         if (released) return
@@ -184,7 +184,7 @@ class MirrorDecoder(
         }
         val backlog = if (outputStarted) queue.size else 0
         val cap = MAX_BACKLOG + (SyncSettings.videoDelayMs + SyncSettings.effectiveJitterMs) / 8
-        // "Geride": kuyruktaki en eski karenin cizim zamani 50 ms'den fazla gecmis (tampon icinde bekleyen kareler geride sayilmaz).
+        // "Behind": the oldest frame in the queue is more than 50 ms past its draw time (frames waiting inside the buffer do not count as behind).
         val behind = backlog >= 2 && queue.peek()?.let {
             System.nanoTime() - it.baseNs - SyncSettings.videoDelayMs * 1_000_000L > 50_000_000L
         } == true
@@ -192,22 +192,22 @@ class MirrorDecoder(
             if ((SyncSettings.videoDelayMs == 0 && behind) || backlog > cap) {
                 queue.clear()
                 skipped += backlog
-                log("Birikme giderildi: $backlog kare atlandı (toplam $skipped)")
+                log("Backlog cleared: $backlog frames skipped (total $skipped)")
             }
         } else if (backlog > cap) {
             queue.clear()
             skipped += backlog
             waitKey = true
-            log("Çözücü yetişemedi: $backlog kare atıldı, anahtar kare bekleniyor")
+            log("Decoder could not keep up: $backlog frames dropped, waiting for a key frame")
             return
         }
         queue.add(Frame(data, len, System.nanoTime(), targetNs))
     }
 
     /**
-     * Kareyi cozucuye verir. Cozucu baslangicta ilk kareleri tutup giris tamponu vermeyebilir
-     * (kare yeniden siralama bekler, ~0,6 sn): kareyi atmak referanslari bozar, bu yuzden en fazla 1 sn beklenir.
-     * Kilit denemeler arasinda birakilir ki release()/configure() engellenmesin.
+     * Gives the frame to the decoder. At startup the decoder may hold the first frames and not provide an input buffer
+     * (it waits for frame reordering, ~0.6 s): dropping the frame would break references, so it waits at most 1 s.
+     * The lock is released between attempts so that release()/configure() are not blocked.
      */
     private fun feedNow(data: ByteArray, len: Int, arrivedNs: Long) {
         val deadline = System.nanoTime() + 1_000_000_000L
@@ -216,13 +216,13 @@ class MirrorDecoder(
             if (System.nanoTime() > deadline) {
                 dropped++
                 MirrorStats.dropped = dropped.toLong()
-                log("Kare atlandı (toplam $dropped)")
+                log("Frame dropped (total $dropped)")
                 return
             }
         }
     }
 
-    /** true: kare islendi (ya da yok sayilmasi gerekiyor); false: giris tamponu henuz yok, tekrar denenmeli. */
+    /** true: the frame was handled (or must be ignored); false: no input buffer yet, try again. */
     @Synchronized
     private fun tryFeed(data: ByteArray, len: Int, arrivedNs: Long): Boolean {
         val c = codec ?: return true
@@ -232,7 +232,7 @@ class MirrorDecoder(
             val buf = c.getInputBuffer(idx) ?: return true
             buf.clear()
             if (len > buf.capacity()) {
-                log("Kare çok büyük: $len")
+                log("Frame too large: $len")
                 c.queueInputBuffer(idx, 0, 0, ptsUs, 0)
                 return true
             }
@@ -241,7 +241,7 @@ class MirrorDecoder(
             inputNs[((ptsUs / 16_667L) % 256).toInt()] = arrivedNs
             c.queueInputBuffer(idx, 0, len, ptsUs, 0)
         } catch (e: Exception) {
-            log("Çözücü hatası: ${e.javaClass.simpleName} ${e.message}")
+            log("Decoder error: ${e.javaClass.simpleName} ${e.message}")
         }
         return true
     }
@@ -261,16 +261,16 @@ class MirrorDecoder(
         try {
             c.stop()
         } catch (e: Exception) {
-            // zaten durmus olabilir
+            // may have already stopped
         }
         try {
             c.release()
         } catch (e: Exception) {
-            // onemsiz
+            // unimportant
         }
     }
 
-    /** Cozucunun adina gore uretici ozel dusuk gecikme anahtarlarini ekler (eslesmeyen marka dokunulmaz). */
+    /** Adds vendor-specific low-latency keys depending on the decoder's name (an unmatched brand is left alone). */
     private fun applyVendorLowLatency(format: MediaFormat, codecName: String) {
         val n = codecName.lowercase()
         when {
@@ -285,11 +285,11 @@ class MirrorDecoder(
                 format.setInteger("vendor.hisi-ext-low-latency-video-dec.video-scene-for-low-latency-rdy", -1)
             }
         }
-        log("Çözücü: $codecName")
+        log("Decoder: $codecName")
     }
 
     private companion object {
-        /** Bu kadar kareden fazla birikirse (60 fps'te ~0,5 sn) kuyruk bosaltilir. */
+        /** If more frames than this pile up (~0.5 s at 60 fps), the queue is emptied. */
         const val MAX_BACKLOG = 30
     }
 }

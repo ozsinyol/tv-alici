@@ -7,7 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import java.security.SecureRandom
 
-/** TV'nin AirPlay alicisi olarak kendini tanitirken kullandigi bilgiler. */
+/** Information the TV uses to advertise itself as an AirPlay receiver. */
 class AirPlayInfo(
     @Volatile var name: String,
     val deviceId: String,
@@ -22,7 +22,7 @@ class AirPlayInfo(
     val pkHex: String get() = publicKey.joinToString("") { "%02x".format(it) }
 
     companion object {
-        /** Cihaz kimligi ve anahtar bir kez uretilir, sonra saklanir. */
+        /** The device identity and key are generated once and then stored. */
         fun load(context: Context, name: String): AirPlayInfo {
             val prefs = context.getSharedPreferences("airplay", Context.MODE_PRIVATE)
             val savedId = prefs.getString("deviceId", null)
@@ -30,11 +30,11 @@ class AirPlayInfo(
             if (savedId != null && savedSeed != null) {
                 return AirPlayInfo(name, savedId, hexToBytes(savedSeed))
             }
-            // Ilk calistirma (ya da eski yer tutucu anahtardan gecis): yeni kimlik uret.
+            // First run (or migration from the old placeholder key): generate a new identity.
             val random = SecureRandom()
             val mac = ByteArray(6)
             random.nextBytes(mac)
-            mac[0] = ((mac[0].toInt() and 0xFE) or 0x02).toByte() // yerel, tekil adres
+            mac[0] = ((mac[0].toInt() and 0xFE) or 0x02).toByte() // locally administered, unicast address
             val id = mac.joinToString(":") { "%02X".format(it) }
             val seed = ByteArray(32)
             random.nextBytes(seed)
@@ -48,7 +48,7 @@ class AirPlayInfo(
     }
 }
 
-/** mDNS (Bonjour) ile _airplay._tcp ve _raop._tcp servislerini yayinlar. */
+/** Advertises the _airplay._tcp and _raop._tcp services over mDNS (Bonjour). */
 class AirPlayAdvertiser(
     context: Context,
     private val airplay: AirPlayInfo,
@@ -59,9 +59,9 @@ class AirPlayAdvertiser(
     private val listeners = mutableListOf<NsdManager.RegistrationListener>()
     private val handler = Handler(Looper.getMainLooper())
 
-    /** Ad degisince servisleri yeni adla yeniden yayinlar. */
+    /** Re-advertises the services under the new name when the name changes. */
     fun restart() {
-        // Web sunucusu thread'inden de cagrilir; listeners listesine yalnizca ana thread dokunsun.
+        // Also called from the web server thread; only the main thread should touch the listeners list.
         handler.post {
             stop()
             handler.postDelayed({ start() }, 800)
@@ -112,7 +112,7 @@ class AirPlayAdvertiser(
             try {
                 nsd.unregisterService(l)
             } catch (e: Exception) {
-                // zaten kayitli degil
+                // not registered anyway
             }
         }
         listeners.clear()
@@ -127,11 +127,11 @@ class AirPlayAdvertiser(
 
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-                onLog("mDNS yayinda: ${serviceInfo.serviceName} ($type)")
+                onLog("mDNS advertising: ${serviceInfo.serviceName} ($type)")
             }
 
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                onLog("mDNS hatasi $errorCode ($type)")
+                onLog("mDNS error $errorCode ($type)")
             }
 
             override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {}
