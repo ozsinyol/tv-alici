@@ -46,6 +46,8 @@ class AudioReceiver(
     private var gain = 1.0f
     private var lastSeq = -1
     private var packets = 0
+    private var lostPackets = 0 // sira numarasi atlayan (gelmeyen) paketler
+    private var latePackets = 0 // tekrar ya da gec gelen paketler
     private var ptsUs = 0L
 
     // Ses/goruntu ayari: ses gecikmesi sessizlik yazarak artirilir, ornek atlayarak azaltilir.
@@ -120,7 +122,11 @@ class AudioReceiver(
         val seq = ((p[2].toInt() and 0xff) shl 8) or (p[3].toInt() and 0xff)
         if (lastSeq >= 0) {
             val diff = ((seq - lastSeq) shl 16) shr 16 // 16 bit tasmayi dogru isle
-            if (diff <= 0) return // tekrar ya da gec gelen paket
+            if (diff <= 0) {
+                latePackets++ // tekrar ya da gec gelen paket
+                return
+            }
+            if (diff > 1) lostPackets += diff - 1
         }
         lastSeq = seq
 
@@ -141,6 +147,10 @@ class AudioReceiver(
         packets++
         if (packets == 1) {
             log("İlk ses paketi: ${size} B, ilk bayt ${"%02x".format(out[0])}")
+        }
+        if (packets % 1000 == 0) {
+            val total = packets + lostPackets
+            log("Ses: $packets paket alındı, $lostPackets kayıp (%${"%.2f".format(lostPackets * 100.0 / total)}), $latePackets geç/tekrar")
         }
         feed(out, size)
     }
