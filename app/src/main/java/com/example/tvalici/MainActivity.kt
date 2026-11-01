@@ -349,6 +349,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
                 { text -> runOnUiThread { say(text) } },
+                { url -> runOnUiThread { playUrl(url) } },
                 { file -> acceptApk(file) },
                 approvals,
                 this,
@@ -1315,12 +1316,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
         val o = org.json.JSONObject()
         val playing = p != null && p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED &&
-            (currentUpload != null || airplayVideoActive)
+            (currentUpload != null || airplayVideoActive || playingUrl != null)
         when {
             mirrorActive -> o.put("state", "mirror").put("zoom", mirrorZoom.toDouble())
             playing && p != null -> {
                 o.put("state", if (p.playbackState == Player.STATE_BUFFERING) "loading" else if (p.isPlaying) "playing" else "paused")
-                o.put("title", currentUpload?.name?.takeIf { it.isNotEmpty() } ?: "AirPlay")
+                o.put("title", currentUpload?.name?.takeIf { it.isNotEmpty() } ?: playingUrl ?: "AirPlay")
                 o.put("pos", p.currentPosition / 1000.0)
                 o.put("dur", if (p.duration > 0) p.duration / 1000.0 else 0.0)
             }
@@ -1344,6 +1345,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
     private val uploadQueue = ArrayDeque<Upload>()
+    private var playingUrl: String? = null // /api/play ile acilan adres (durum kartinda gosterilir)
     private var currentUpload: Upload? = null
 
     private fun play(upload: Upload) {
@@ -1369,7 +1371,28 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return true
     }
 
+    /** Web sayfasindan/yer iminden gelen http(s) video adresini ExoPlayer ile oynatir (MP4, HLS ...). */
+    private fun playUrl(url: String) {
+        val uri = Uri.parse(url)
+        if (uri.scheme != "http" && uri.scheme != "https") return
+        uploadQueue.clear()
+        currentUpload = null
+        playingUrl = (uri.host ?: "") + (uri.lastPathSegment?.let { "/$it" } ?: "")
+        overlayView.visibility = android.view.View.GONE
+        photoView.visibility = android.view.View.GONE
+        val item = MediaItem.Builder().setUri(uri).apply {
+            if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+        }.build()
+        player?.apply {
+            setMediaItem(item)
+            prepare()
+            playWhenReady = true
+        }
+        appendLog("Bağlantıdan oynatılıyor: $playingUrl")
+    }
+
     private fun start(upload: Upload) {
+        playingUrl = null
         currentUpload = upload
         overlayView.visibility = android.view.View.GONE
         val factory = DataSource.Factory { GrowingFileDataSource(upload) }
@@ -1542,6 +1565,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     /** Her seyi durdurur ve QR ekranina doner (Geri tusu ve uyku zamanlayicisi kullanir). */
     private fun stopPlayback() {
         uploadQueue.clear()
+        playingUrl = null
         player?.stop()
         photoView.visibility = android.view.View.GONE
         if (airplayVideoActive) endAirplayVideo()

@@ -16,6 +16,7 @@ import java.security.MessageDigest
  * GET  /api/version       -> kurulu surum (v<numara>)
  * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop, next, zoomin, zoomout, zoomreset, mute; seek ve vol "cmd:deger" bicimiyle)
  * PUT  /upload + X-Queue: 1 -> video oynatma sirasinin sonuna eklenir (bitince siradaki oynar)
+ * POST /api/play?u=URL    -> http(s) video adresini TV'de oynatir (yer imi / adres kutusu)
  * POST /api/say?text=..  -> TV ekraninda buyuk mesaj gosterir (bos metin kaldirir)
  * GET  /api/name          -> AirPlay'de gorunen sunucu adi;  POST /api/name?set=AD -> degistirir
  * GET  /api/trusted       -> guvenilen cihazlar (satir satir);  POST /api/trusted?forget=IP | ?clear=1
@@ -39,6 +40,8 @@ class VideoServer(
     private val onControl: (String) -> Unit,
     /** Ekranda buyuk yazi olarak gosterilecek mesaj (bos metin mesaji kaldirir). */
     private val onSay: (String) -> Unit,
+    /** Verilen http(s) video adresini TV'de oynatir (duz MP4/HLS). */
+    private val onPlayUrl: (String) -> Unit,
     /** Yuklenen APK'yi dogrular, sorun yoksa kurulumu baslatir. Sorunu metin olarak dondurur (null = tamam). */
     private val onApk: (File) -> String?,
     private val trust: TrustAdmin,
@@ -82,6 +85,7 @@ class VideoServer(
             path == "/apple-touch-icon.png" && get -> icon()
             path == "/manifest.json" && get -> manifest()
             path == "/api/say" && post -> handleSay(session)
+            path == "/api/play" && post -> handlePlayUrl(session)
             path == "/api/name" && (get || post) -> handleName(session)
             path == "/api/trusted" && (get || post) -> handleTrusted(session)
             (path == "/name" || path == "/trusted") && get ->
@@ -147,6 +151,15 @@ class VideoServer(
     private fun manifest(): Response {
         val json = """{"name":"AirPlay for Android","short_name":"AirPlay","start_url":"/","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"/apple-touch-icon.png","sizes":"180x180","type":"image/png"}]}"""
         return newFixedLengthResponse(Response.Status.OK, "application/manifest+json; charset=utf-8", json)
+    }
+
+    private fun handlePlayUrl(session: IHTTPSession): Response {
+        authFail(session, session.headers["x-pin"])?.let { return it }
+        val u = (session.parms["u"] ?: "").trim()
+        val ok = u.length in 8..2000 && (u.startsWith("http://") || u.startsWith("https://")) && !u.contains(' ')
+        if (!ok) return text(L(session, "Geçersiz adres (http/https ile başlamalı).", "Invalid address (must start with http/https)."), Response.Status.BAD_REQUEST)
+        onPlayUrl(u)
+        return text("OK")
     }
 
     private fun handleSay(session: IHTTPSession): Response {
@@ -442,6 +455,13 @@ class VideoServer(
       <progress id="ilerleme" value="0" max="100" hidden></progress>
     </div>
     <div class="card">
+      <h2 data-i="h_url"></h2>
+      <div class="satir"><input type="text" id="url" inputmode="url" autocapitalize="none" autocorrect="off" placeholder="https://..."> <button id="urlGonder" data-i="btn_url"></button></div>
+      <p class="not" data-i="note_bm" style="margin-top:12px"></p>
+      <button class="gri tam" id="bmKopyala" data-i="btn_bm"></button>
+      <input type="text" id="bmKod" readonly hidden style="margin-top:8px;font-size:12px">
+    </div>
+    <div class="card">
       <h2 data-i="h_say"></h2>
       <div class="satir"><input type="text" id="mesaj" maxlength="200"> <button id="mesajGonder" data-i="btn_say"></button></div>
     </div>
@@ -495,7 +515,7 @@ class VideoServer(
 var DIL = {
   tr: {
     tab_send: 'Gönder', tab_settings: 'Ayarlar', tab_update: 'Güncelle', tab_log: 'Günlük',
-    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda', h_say: "TV'ye mesaj", btn_say: 'Göster',
+    h_url: 'Bağlantıdan oynat', btn_url: 'Oynat', btn_bm: 'Yer imi kodunu kopyala', note_bm: "Düz adresli (MP4/HLS) bir videoyu TV'de oynatmak için adresini yapıştırın. Safari'de AirPlay simgesi çıkmayan sitelerde: bu kodu bir yer imine yapıştırın, video sayfasındayken yer imine dokunun. blob/DRM'li videolarda (YouTube, Netflix) çalışmaz; onlar için ekran yansıtmayı kullanın.", m_url_sent: 'TV\'ye gönderildi.', m_copied: 'Kopyalandı.', h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda', h_say: "TV'ye mesaj", btn_say: 'Göster',
     c_back: '⏪ 10 sn', c_play: '⏯ Oynat / Duraklat', c_fwd: '10 sn ⏩',
     c_voldown: 'Ses −', c_volup: 'Ses +', c_stop: 'Durdur', c_next: 'Sonraki', np_idle: 'Şu an bir şey oynamıyor', np_mirror: 'Ekran yansıtılıyor', np_audio: 'Ses çalıyor', h_queue: 'Sıra', h_zoom: 'Yakınlaştır',
     h_name: 'AirPlay sunucu adı', btn_save: 'Kaydet', h_trusted: 'Güvenilen cihazlar', btn_clear_all: 'Hepsini sil',
@@ -512,7 +532,7 @@ var DIL = {
   },
   en: {
     tab_send: 'Send', tab_settings: 'Settings', tab_update: 'Update', tab_log: 'Log',
-    h_send: 'Send to TV', btn_send: 'Send', h_remote: 'Remote', h_say: 'Message on TV', btn_say: 'Show',
+    h_url: 'Play a link', btn_url: 'Play', btn_bm: 'Copy bookmarklet', note_bm: "Paste a direct (MP4/HLS) video address to play it on the TV. For sites where Safari shows no AirPlay icon: paste this code into a bookmark, then tap the bookmark while on the video page. Does not work for blob/DRM videos (YouTube, Netflix); use screen mirroring for those.", m_url_sent: 'Sent to the TV.', m_copied: 'Copied.', h_send: 'Send to TV', btn_send: 'Send', h_remote: 'Remote', h_say: 'Message on TV', btn_say: 'Show',
     c_back: '⏪ 10 s', c_play: '⏯ Play / Pause', c_fwd: '10 s ⏩',
     c_voldown: 'Vol −', c_volup: 'Vol +', c_stop: 'Stop', c_next: 'Next', np_idle: 'Nothing playing', np_mirror: 'Screen mirroring', np_audio: 'Playing audio', h_queue: 'Up next', h_zoom: 'Zoom',
     h_name: 'AirPlay server name', btn_save: 'Save', h_trusted: 'Trusted devices', btn_clear_all: 'Delete all',
@@ -742,6 +762,12 @@ function ayarYukle() {
     document.getElementById('surum').textContent = '(' + v + ')';
     listeYukle();
     durumCek();
+    if (bekleyenUrl) {
+      var u = bekleyenUrl;
+      bekleyenUrl = null;
+      try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+      urlGonder(u);
+    }
   }).catch(hata);
 }
 
@@ -864,6 +890,31 @@ document.getElementById('btn').onclick = function () {
   if (!dosyalar.length) { mesaj(L10('m_pick_video')); return; }
   api('/control?cmd=ping', 'POST').then(function () { baslat(dosyalar, 0); }).catch(hata);
 };
+
+// ---- Baglantidan oynat + yer imi ----
+function urlGonder(u) {
+  return api('/api/play?u=' + encodeURIComponent(u), 'POST').then(function () { mesaj(L10('m_url_sent')); setTimeout(durumCek, 800); }).catch(hata);
+}
+document.getElementById('urlGonder').onclick = function () {
+  var u = document.getElementById('url').value.trim();
+  if (u) urlGonder(u);
+};
+document.getElementById('bmKopyala').onclick = function () {
+  var kod = "javascript:(function(){var v=[].slice.call(document.querySelectorAll('video')),u='',i,s;for(i=0;i<v.length;i++){s=v[i].currentSrc||v[i].src;if(s&&s.indexOf('blob:')!==0){u=s;break}}"
+    + "if(!u){var m=document.querySelector('meta[property=\"og:video\"],meta[property=\"og:video:url\"]');u=m&&m.content}"
+    + "if(!u){alert('No direct video address found (blob/DRM?)');return}"
+    + "var w=window.open('" + location.origin + "/?play='+encodeURIComponent(u),'_blank');if(!w)location.href='" + location.origin + "/?play='+encodeURIComponent(u)})()";
+  var alan = document.getElementById('bmKod');
+  alan.hidden = false;
+  alan.value = kod;
+  alan.focus();
+  alan.select();
+  try { alan.setSelectionRange(0, kod.length); } catch (e) {}
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  mesaj(ok ? L10('m_copied') : '');
+};
+var bekleyenUrl = params.get('play');
 
 document.getElementById('mesajGonder').onclick = function () {
   api('/api/say?text=' + encodeURIComponent(document.getElementById('mesaj').value), 'POST')
