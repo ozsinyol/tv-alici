@@ -12,7 +12,9 @@ import java.security.MessageDigest
  * PUT  /upload            -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
  * PUT  /update-apk        -> uygulamanin yeni APK'sini alir; dogrulanirsa TV'de kurulum ekrani acilir
  * GET  /api/version       -> kurulu surum (v<numara>)
- * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop)
+ * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop, next, zoomin, zoomout, zoomreset)
+ * PUT  /upload + X-Queue: 1 -> video oynatma sirasinin sonuna eklenir (bitince siradaki oynar)
+ * POST /api/say?text=..  -> TV ekraninda buyuk mesaj gosterir (bos metin kaldirir)
  * GET  /api/name          -> AirPlay'de gorunen sunucu adi;  POST /api/name?set=AD -> degistirir
  * GET  /api/trusted       -> guvenilen cihazlar (satir satir);  POST /api/trusted?forget=IP | ?clear=1
  * GET  /log               -> duz metin gunluk (PIN: ?pin=.. ya da X-Pin basligi)
@@ -33,6 +35,8 @@ class VideoServer(
     private val pin: String,
     private val onUploadStart: (Upload) -> Unit,
     private val onControl: (String) -> Unit,
+    /** Ekranda buyuk yazi olarak gosterilecek mesaj (bos metin mesaji kaldirir). */
+    private val onSay: (String) -> Unit,
     /** Yuklenen APK'yi dogrular, sorun yoksa kurulumu baslatir. Sorunu metin olarak dondurur (null = tamam). */
     private val onApk: (File) -> String?,
     private val trust: TrustAdmin,
@@ -70,6 +74,7 @@ class VideoServer(
             }
             path == "/control" && post -> handleControl(session)
             path == "/log" && get -> handleLog(session)
+            path == "/api/say" && post -> handleSay(session)
             path == "/api/name" && (get || post) -> handleName(session)
             path == "/api/trusted" && (get || post) -> handleTrusted(session)
             (path == "/name" || path == "/trusted") && get ->
@@ -118,6 +123,14 @@ class VideoServer(
         return text(LogBuffer.dump())
     }
 
+    private fun handleSay(session: IHTTPSession): Response {
+        authFail(session, session.headers["x-pin"])?.let { return it }
+        val raw = session.parms["text"] ?: ""
+        val clean = raw.replace(Regex("[\\p{Cntrl}]"), " ").trim().take(200)
+        onSay(clean)
+        return text("OK")
+    }
+
     private fun handleName(session: IHTTPSession): Response {
         authFail(session, session.headers["x-pin"])?.let { return it }
         if (session.method == Method.POST) {
@@ -153,13 +166,16 @@ class VideoServer(
         val length = session.headers["content-length"]?.toLongOrNull()
             ?: return text(L(session, "Boyut bilgisi yok", "No size information"), Response.Status.BAD_REQUEST)
 
-        // Onceki yuklemeleri temizle (onbellek dolmasin).
-        dir.listFiles()?.forEach { f ->
-            if (f.name.startsWith("video_")) f.delete()
+        // Kuyruga eklenmiyorsa onceki yuklemeleri temizle (onbellek dolmasin).
+        val queued = session.headers["x-queue"] == "1"
+        if (!queued) {
+            dir.listFiles()?.forEach { f ->
+                if (f.name.startsWith("video_")) f.delete()
+            }
         }
         val dest = File(dir, "video_${System.currentTimeMillis()}")
         dest.createNewFile()
-        val upload = Upload(dest, length)
+        val upload = Upload(dest, length, queued)
         onUploadStart(upload)
 
         return try {
@@ -288,9 +304,11 @@ class VideoServer(
 
   <section id="gonder">
     <h2 data-i="h_send"></h2>
-    <input type="file" id="dosya" accept="video/*"><br>
+    <input type="file" id="dosya" accept="video/*" multiple><br>
     <button id="btn" data-i="btn_send"></button>
     <progress id="ilerleme" value="0" max="100" hidden></progress>
+    <h2 data-i="h_say"></h2>
+    <div><input type="text" id="mesaj" maxlength="200"> <button id="mesajGonder" data-i="btn_say"></button></div>
     <h2 data-i="h_remote"></h2>
     <div>
       <button class="gri" data-cmd="back10" data-i="c_back"></button>
@@ -300,6 +318,10 @@ class VideoServer(
     <div>
       <button class="gri" data-cmd="voldown" data-i="c_voldown"></button>
       <button class="gri" data-cmd="volup" data-i="c_volup"></button>
+      <button class="gri" data-cmd="zoomout">🔍−</button>
+      <button class="gri" data-cmd="zoomin">🔍+</button>
+      <button class="gri" data-cmd="zoomreset">1×</button>
+      <button class="gri" data-cmd="next" data-i="c_next"></button>
       <button class="gri" data-cmd="stop" data-i="c_stop"></button>
     </div>
   </section>
@@ -330,9 +352,9 @@ class VideoServer(
 var DIL = {
   tr: {
     tab_send: 'Gönder', tab_settings: 'Ayarlar', tab_update: 'Güncelle', tab_log: 'Günlük',
-    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda',
+    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda', h_say: 'TV'ye mesaj', btn_say: 'Göster',
     c_back: '⏪ 10 sn', c_play: '⏯ Oynat / Duraklat', c_fwd: '10 sn ⏩',
-    c_voldown: 'Ses −', c_volup: 'Ses +', c_stop: 'Durdur',
+    c_voldown: 'Ses −', c_volup: 'Ses +', c_stop: 'Durdur', c_next: 'Sonraki',
     h_name: 'AirPlay sunucu adı', btn_save: 'Kaydet', h_trusted: 'Güvenilen cihazlar', btn_clear_all: 'Hepsini sil',
     h_update: 'Uygulamayı güncelle',
     note_update: "Uygulamanın release anahtarıyla imzalı APK'sını seç. Doğrulanırsa TV'de kurulum ekranı açılır, kumandayla onayla. Uygulama TV'de açık olmalı.",
@@ -347,9 +369,9 @@ var DIL = {
   },
   en: {
     tab_send: 'Send', tab_settings: 'Settings', tab_update: 'Update', tab_log: 'Log',
-    h_send: 'Send to TV', btn_send: 'Send', h_remote: 'Remote',
+    h_send: 'Send to TV', btn_send: 'Send', h_remote: 'Remote', h_say: 'Message on TV', btn_say: 'Show',
     c_back: '⏪ 10 s', c_play: '⏯ Play / Pause', c_fwd: '10 s ⏩',
-    c_voldown: 'Vol −', c_volup: 'Vol +', c_stop: 'Stop',
+    c_voldown: 'Vol −', c_volup: 'Vol +', c_stop: 'Stop', c_next: 'Next',
     h_name: 'AirPlay server name', btn_save: 'Save', h_trusted: 'Trusted devices', btn_clear_all: 'Delete all',
     h_update: 'Update the app',
     note_update: 'Choose the APK signed with the same release key. If it checks out, the install screen opens on the TV; confirm with the remote. The app must be open on the TV.',
@@ -365,9 +387,9 @@ var DIL = {
   es: {
     tab_send: 'Enviar', tab_settings: 'Ajustes', tab_update: 'Actualizar',
     tab_log: 'Registro', h_send: 'Enviar al televisor', btn_send: 'Enviar',
-    h_remote: 'Mando', c_back: '⏪ 10 s', c_play: '⏯ Reproducir / Pausa',
+    h_remote: 'Mando', h_say: 'Mensaje en el televisor', btn_say: 'Mostrar', c_back: '⏪ 10 s', c_play: '⏯ Reproducir / Pausa',
     c_fwd: '10 s ⏩', c_voldown: 'Vol −', c_volup: 'Vol +',
-    c_stop: 'Detener', h_name: 'Nombre del servidor AirPlay', btn_save: 'Guardar',
+    c_stop: 'Detener', c_next: 'Siguiente', h_name: 'Nombre del servidor AirPlay', btn_save: 'Guardar',
     h_trusted: 'Dispositivos de confianza', btn_clear_all: 'Eliminar todos', h_update: 'Actualizar la app',
     note_update: 'Elige el APK firmado con la clave de release de la app. Si se verifica, se abre la pantalla de instalación en el televisor; confirma con el mando. La app debe estar abierta en el televisor.', btn_apk: 'Enviar APK', h_log: 'Registro',
     btn_refresh: 'Actualizar', btn_delete: 'Eliminar', m_conn: 'Error de conexión.',
@@ -380,9 +402,9 @@ var DIL = {
   fr: {
     tab_send: 'Envoyer', tab_settings: 'Réglages', tab_update: 'Mise à jour',
     tab_log: 'Journal', h_send: 'Envoyer au téléviseur', btn_send: 'Envoyer',
-    h_remote: 'Télécommande', c_back: '⏪ 10 s', c_play: '⏯ Lecture / Pause',
+    h_remote: 'Télécommande', h_say: 'Message sur la TV', btn_say: 'Afficher', c_back: '⏪ 10 s', c_play: '⏯ Lecture / Pause',
     c_fwd: '10 s ⏩', c_voldown: 'Vol −', c_volup: 'Vol +',
-    c_stop: 'Arrêter', h_name: 'Nom du serveur AirPlay', btn_save: 'Enregistrer',
+    c_stop: 'Arrêter', c_next: 'Suivant', h_name: 'Nom du serveur AirPlay', btn_save: 'Enregistrer',
     h_trusted: 'Appareils de confiance', btn_clear_all: 'Tout supprimer', h_update: 'Mettre à jour l\'application',
     note_update: 'Choisissez l\'APK signé avec la clé de release de l\'application. S\'il est validé, l\'écran d\'installation s\'ouvre sur le téléviseur ; confirmez avec la télécommande. L\'application doit être ouverte sur le téléviseur.', btn_apk: 'Envoyer l\'APK', h_log: 'Journal',
     btn_refresh: 'Actualiser', btn_delete: 'Supprimer', m_conn: 'Erreur de connexion.',
@@ -395,9 +417,9 @@ var DIL = {
   de: {
     tab_send: 'Senden', tab_settings: 'Einstellungen', tab_update: 'Update',
     tab_log: 'Protokoll', h_send: 'An den Fernseher senden', btn_send: 'Senden',
-    h_remote: 'Fernbedienung', c_back: '⏪ 10 s', c_play: '⏯ Wiedergabe / Pause',
+    h_remote: 'Fernbedienung', h_say: 'Nachricht auf dem TV', btn_say: 'Anzeigen', c_back: '⏪ 10 s', c_play: '⏯ Wiedergabe / Pause',
     c_fwd: '10 s ⏩', c_voldown: 'Lautst. −', c_volup: 'Lautst. +',
-    c_stop: 'Stopp', h_name: 'Name des AirPlay-Servers', btn_save: 'Speichern',
+    c_stop: 'Stopp', c_next: 'Weiter', h_name: 'Name des AirPlay-Servers', btn_save: 'Speichern',
     h_trusted: 'Vertrauenswürdige Geräte', btn_clear_all: 'Alle löschen', h_update: 'App aktualisieren',
     note_update: 'Wähle die APK, die mit dem Release-Schlüssel der App signiert ist. Wird sie bestätigt, öffnet sich der Installationsbildschirm auf dem Fernseher; bestätige mit der Fernbedienung. Die App muss auf dem Fernseher geöffnet sein.', btn_apk: 'APK senden', h_log: 'Protokoll',
     btn_refresh: 'Aktualisieren', btn_delete: 'Löschen', m_conn: 'Verbindungsfehler.',
@@ -410,9 +432,9 @@ var DIL = {
   pt: {
     tab_send: 'Enviar', tab_settings: 'Ajustes', tab_update: 'Atualizar',
     tab_log: 'Registro', h_send: 'Enviar para a TV', btn_send: 'Enviar',
-    h_remote: 'Controle', c_back: '⏪ 10 s', c_play: '⏯ Reproduzir / Pausar',
+    h_remote: 'Controle', h_say: 'Mensagem na TV', btn_say: 'Mostrar', c_back: '⏪ 10 s', c_play: '⏯ Reproduzir / Pausar',
     c_fwd: '10 s ⏩', c_voldown: 'Vol −', c_volup: 'Vol +',
-    c_stop: 'Parar', h_name: 'Nome do servidor AirPlay', btn_save: 'Salvar',
+    c_stop: 'Parar', c_next: 'Próximo', h_name: 'Nome do servidor AirPlay', btn_save: 'Salvar',
     h_trusted: 'Dispositivos confiáveis', btn_clear_all: 'Excluir todos', h_update: 'Atualizar o app',
     note_update: 'Escolha o APK assinado com a chave de release do app. Se for validado, a tela de instalação abre na TV; confirme com o controle. O app precisa estar aberto na TV.', btn_apk: 'Enviar APK', h_log: 'Registro',
     btn_refresh: 'Atualizar', btn_delete: 'Excluir', m_conn: 'Erro de conexão.',
@@ -425,9 +447,9 @@ var DIL = {
   it: {
     tab_send: 'Invia', tab_settings: 'Impostazioni', tab_update: 'Aggiorna',
     tab_log: 'Registro', h_send: 'Invia alla TV', btn_send: 'Invia',
-    h_remote: 'Telecomando', c_back: '⏪ 10 s', c_play: '⏯ Riproduci / Pausa',
+    h_remote: 'Telecomando', h_say: 'Messaggio sulla TV', btn_say: 'Mostra', c_back: '⏪ 10 s', c_play: '⏯ Riproduci / Pausa',
     c_fwd: '10 s ⏩', c_voldown: 'Vol −', c_volup: 'Vol +',
-    c_stop: 'Ferma', h_name: 'Nome del server AirPlay', btn_save: 'Salva',
+    c_stop: 'Ferma', c_next: 'Avanti', h_name: 'Nome del server AirPlay', btn_save: 'Salva',
     h_trusted: 'Dispositivi attendibili', btn_clear_all: 'Elimina tutti', h_update: 'Aggiorna l\'app',
     note_update: 'Scegli l\'APK firmato con la chiave di release dell\'app. Se viene verificato, sulla TV si apre la schermata di installazione; conferma con il telecomando. L\'app deve essere aperta sulla TV.', btn_apk: 'Invia APK', h_log: 'Registro',
     btn_refresh: 'Aggiorna', btn_delete: 'Elimina', m_conn: 'Errore di connessione.',
@@ -440,9 +462,9 @@ var DIL = {
   ru: {
     tab_send: 'Отправка', tab_settings: 'Настройки', tab_update: 'Обновление',
     tab_log: 'Журнал', h_send: 'Отправить на ТВ', btn_send: 'Отправить',
-    h_remote: 'Пульт', c_back: '⏪ 10 с', c_play: '⏯ Пуск / Пауза',
+    h_remote: 'Пульт', h_say: 'Сообщение на ТВ', btn_say: 'Показать', c_back: '⏪ 10 с', c_play: '⏯ Пуск / Пауза',
     c_fwd: '10 с ⏩', c_voldown: 'Гр. −', c_volup: 'Гр. +',
-    c_stop: 'Стоп', h_name: 'Имя сервера AirPlay', btn_save: 'Сохранить',
+    c_stop: 'Стоп', c_next: 'Далее', h_name: 'Имя сервера AirPlay', btn_save: 'Сохранить',
     h_trusted: 'Доверенные устройства', btn_clear_all: 'Удалить все', h_update: 'Обновить приложение',
     note_update: 'Выберите APK, подписанный релизным ключом приложения. Если проверка пройдена, на телевизоре откроется экран установки; подтвердите пультом. Приложение должно быть открыто на телевизоре.', btn_apk: 'Отправить APK', h_log: 'Журнал',
     btn_refresh: 'Обновить', btn_delete: 'Удалить', m_conn: 'Ошибка соединения.',
@@ -455,9 +477,9 @@ var DIL = {
   ja: {
     tab_send: '送信', tab_settings: '設定', tab_update: 'アップデート',
     tab_log: 'ログ', h_send: 'テレビに送信', btn_send: '送信',
-    h_remote: 'リモコン', c_back: '⏪ 10 秒', c_play: '⏯ 再生 / 一時停止',
+    h_remote: 'リモコン', h_say: 'テレビにメッセージ', btn_say: '表示', c_back: '⏪ 10 秒', c_play: '⏯ 再生 / 一時停止',
     c_fwd: '10 秒 ⏩', c_voldown: '音量 −', c_volup: '音量 +',
-    c_stop: '停止', h_name: 'AirPlay サーバー名', btn_save: '保存',
+    c_stop: '停止', c_next: '次へ', h_name: 'AirPlay サーバー名', btn_save: '保存',
     h_trusted: '信頼済みデバイス', btn_clear_all: 'すべて削除', h_update: 'アプリをアップデート',
     note_update: 'アプリのリリース鍵で署名された APK を選択してください。検証に成功すると、テレビにインストール画面が開くので、リモコンで確認します。アプリはテレビで開いている必要があります。', btn_apk: 'APK を送信', h_log: 'ログ',
     btn_refresh: '更新', btn_delete: '削除', m_conn: '接続エラー。',
@@ -470,9 +492,9 @@ var DIL = {
   ko: {
     tab_send: '보내기', tab_settings: '설정', tab_update: '업데이트',
     tab_log: '로그', h_send: 'TV로 보내기', btn_send: '보내기',
-    h_remote: '리모컨', c_back: '⏪ 10초', c_play: '⏯ 재생 / 일시정지',
+    h_remote: '리모컨', h_say: 'TV에 메시지', btn_say: '표시', c_back: '⏪ 10초', c_play: '⏯ 재생 / 일시정지',
     c_fwd: '10초 ⏩', c_voldown: '볼륨 −', c_volup: '볼륨 +',
-    c_stop: '정지', h_name: 'AirPlay 서버 이름', btn_save: '저장',
+    c_stop: '정지', c_next: '다음', h_name: 'AirPlay 서버 이름', btn_save: '저장',
     h_trusted: '신뢰하는 기기', btn_clear_all: '모두 삭제', h_update: '앱 업데이트',
     note_update: '앱의 릴리스 키로 서명된 APK를 선택하세요. 확인되면 TV에 설치 화면이 열리며, 리모컨으로 확인하세요. 앱이 TV에서 열려 있어야 합니다.', btn_apk: 'APK 보내기', h_log: '로그',
     btn_refresh: '새로고침', btn_delete: '삭제', m_conn: '연결 오류.',
@@ -485,9 +507,9 @@ var DIL = {
   zh: {
     tab_send: '发送', tab_settings: '设置', tab_update: '更新',
     tab_log: '日志', h_send: '发送到电视', btn_send: '发送',
-    h_remote: '遥控', c_back: '⏪ 10 秒', c_play: '⏯ 播放 / 暂停',
+    h_remote: '遥控', h_say: '在电视上显示消息', btn_say: '显示', c_back: '⏪ 10 秒', c_play: '⏯ 播放 / 暂停',
     c_fwd: '10 秒 ⏩', c_voldown: '音量 −', c_volup: '音量 +',
-    c_stop: '停止', h_name: 'AirPlay 服务器名称', btn_save: '保存',
+    c_stop: '停止', c_next: '下一个', h_name: 'AirPlay 服务器名称', btn_save: '保存',
     h_trusted: '受信任的设备', btn_clear_all: '全部删除', h_update: '更新应用',
     note_update: '请选择使用应用发布密钥签名的 APK。验证通过后,电视上会打开安装界面,请用遥控器确认。应用必须在电视上保持打开。', btn_apk: '发送 APK', h_log: '日志',
     btn_refresh: '刷新', btn_delete: '删除', m_conn: '连接错误。',
@@ -500,9 +522,9 @@ var DIL = {
   ar: {
     tab_send: 'إرسال', tab_settings: 'الإعدادات', tab_update: 'تحديث',
     tab_log: 'السجل', h_send: 'إرسال إلى التلفاز', btn_send: 'إرسال',
-    h_remote: 'جهاز التحكم', c_back: '⏪ 10 ث', c_play: '⏯ تشغيل / إيقاف مؤقت',
+    h_remote: 'جهاز التحكم', h_say: 'رسالة على التلفاز', btn_say: 'عرض', c_back: '⏪ 10 ث', c_play: '⏯ تشغيل / إيقاف مؤقت',
     c_fwd: '10 ث ⏩', c_voldown: 'الصوت −', c_volup: 'الصوت +',
-    c_stop: 'إيقاف', h_name: 'اسم خادم AirPlay', btn_save: 'حفظ',
+    c_stop: 'إيقاف', c_next: 'التالي', h_name: 'اسم خادم AirPlay', btn_save: 'حفظ',
     h_trusted: 'الأجهزة الموثوقة', btn_clear_all: 'حذف الكل', h_update: 'تحديث التطبيق',
     note_update: 'اختر ملف APK الموقَّع بمفتاح الإصدار الخاص بالتطبيق. إذا تم التحقق منه، تُفتح شاشة التثبيت على التلفاز؛ أكّد بجهاز التحكم. يجب أن يكون التطبيق مفتوحًا على التلفاز.', btn_apk: 'إرسال APK', h_log: 'السجل',
     btn_refresh: 'تحديث', btn_delete: 'حذف', m_conn: 'خطأ في الاتصال.',
@@ -638,27 +660,38 @@ function gunlukYukle() {
 }
 document.getElementById('yenile').onclick = gunlukYukle;
 
-function baslat(f) {
+function baslat(dosyalar, i) {
+  var f = dosyalar[i];
   var xhr = new XMLHttpRequest();
   xhr.open('PUT', '/upload');
   xhr.setRequestHeader('X-Pin', pin());
+  if (i > 0) xhr.setRequestHeader('X-Queue', '1');
+  var sayac = dosyalar.length > 1 ? ' (' + (i + 1) + '/' + dosyalar.length + ')' : '';
   xhr.upload.onprogress = function (e) {
     if (e.lengthComputable) { ilerleme.hidden = false; ilerleme.value = e.loaded / e.total * 100; }
   };
   xhr.onload = function () {
-    if (xhr.status === 200) mesaj(L10('m_uploaded'));
+    if (xhr.status === 200) {
+      mesaj(L10('m_uploaded') + sayac);
+      if (i + 1 < dosyalar.length) baslat(dosyalar, i + 1);
+    }
     else if (xhr.status === 401) mesaj(L10('m_badpin'));
     else mesaj(xhr.responseText || (L10('m_err') + ' ' + xhr.status));
   };
   xhr.onerror = function () { mesaj(L10('m_conn')); };
-  mesaj(L10('m_sending'));
+  mesaj(L10('m_sending') + sayac);
   xhr.send(f);
 }
 
 document.getElementById('btn').onclick = function () {
-  var f = document.getElementById('dosya').files[0];
-  if (!f) { mesaj(L10('m_pick_video')); return; }
-  api('/control?cmd=ping', 'POST').then(function () { baslat(f); }).catch(hata);
+  var dosyalar = Array.prototype.slice.call(document.getElementById('dosya').files);
+  if (!dosyalar.length) { mesaj(L10('m_pick_video')); return; }
+  api('/control?cmd=ping', 'POST').then(function () { baslat(dosyalar, 0); }).catch(hata);
+};
+
+document.getElementById('mesajGonder').onclick = function () {
+  api('/api/say?text=' + encodeURIComponent(document.getElementById('mesaj').value), 'POST')
+    .then(function () { mesaj(''); }).catch(hata);
 };
 
 var dugmeler = document.querySelectorAll('button[data-cmd]');

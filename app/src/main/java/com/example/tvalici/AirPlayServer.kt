@@ -40,6 +40,18 @@ interface VideoEvents {
 
     /** Fotograf AirPlay: JPEG'i ekranda gosterir. */
     fun showPhoto(jpeg: ByteArray)
+
+    /** Muzik AirPlay: sarki bilgisi geldi (alanlar bos olabilir). */
+    fun audioTrack(info: TrackInfo) {}
+
+    /** Muzik AirPlay: kapak resmi geldi; null kapagin kaldirildigini belirtir. */
+    fun audioArt(image: ByteArray?) {}
+
+    /** Bir iPhone/iPad yayina baglandi (cihaz adi bilinmiyorsa null). */
+    fun deviceConnected(name: String?) {}
+
+    /** Muzik AirPlay oturumu bitti; sarki bilgisi temizlenmeli. */
+    fun audioEnded() {}
 }
 
 /** /playback-info yaniti icin oynatici anlik durumu. */
@@ -247,7 +259,9 @@ class AirPlayServer(
         } finally {
             synchronized(sessions) { sessions.remove(session) }
             if (reverse === session) reverse = null
+            val hadAudio = session.audio != null
             if (session.closeAll()) events.mirrorStopped()
+            if (hadAudio) video.audioEnded()
         }
     }
 
@@ -354,7 +368,16 @@ class AirPlayServer(
                 return
             }
             "SET_PARAMETER" -> {
-                val text = String(body, Charsets.ISO_8859_1)
+                val ctype = headers["content-type"]?.substringBefore(';')?.trim()?.lowercase()
+                if (ctype == "application/x-dmap-tagged") {
+                    val info = DmapParser.parse(body)
+                    log("  sarki: ${info.artist ?: "?"} - ${info.title ?: "?"}")
+                    video.audioTrack(info)
+                } else if (ctype == "image/jpeg" || ctype == "image/png") {
+                    log("  kapak resmi ${body.size} B")
+                    video.audioArt(if (body.isEmpty()) null else body)
+                }
+                val text = if (ctype == null || ctype.startsWith("text/")) String(body, Charsets.ISO_8859_1) else ""
                 if (text.startsWith("volume:")) {
                     val db = text.removePrefix("volume:").trim().toFloatOrNull()
                     if (db != null) {
@@ -609,6 +632,9 @@ class AirPlayServer(
             s.aesKey = aes
             s.aesIv = eiv.copyOf()
             log("  SETUP 1: yayın anahtarı hazır")
+            val devName = (root.objectForKey("name") as? NSString)?.content
+                ?.replace(Regex("[\\p{Cntrl}]"), " ")?.trim()?.take(40)?.takeIf { it.isNotEmpty() }
+            video.deviceConnected(devName)
 
             val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
             s.ntp?.stop()
@@ -735,9 +761,13 @@ class AirPlayServer(
             has96 -> {
                 s.stopAudio()
                 s.closeUdp()
+                video.audioEnded()
             }
             has110 -> if (s.stopMirror()) events.mirrorStopped()
-            else -> if (s.closeAll()) events.mirrorStopped()
+            else -> {
+                if (s.closeAll()) events.mirrorStopped()
+                video.audioEnded()
+            }
         }
     }
 
@@ -755,7 +785,7 @@ class AirPlayServer(
     ) {
         val sb = StringBuilder()
         sb.append("$proto $code $text\r\n")
-        sb.append("Server: AirTunes/220.68\r\n")
+        sb.append("Server: AirTunes/${airplay.srcvers}\r\n")
         if (cseq != null) sb.append("CSeq: $cseq\r\n")
         for ((k, v) in extra) sb.append("$k: $v\r\n")
         if (contentType != null) sb.append("Content-Type: $contentType\r\n")

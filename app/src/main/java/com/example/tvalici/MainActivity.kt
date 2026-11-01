@@ -5,13 +5,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -24,6 +29,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -64,6 +72,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStarted() {
             mirrorActive = true
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             logWifi()
             runOnUiThread {
                 player?.stop()
@@ -79,6 +90,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStopped() {
             mirrorActive = false
+            lastMirrorW = 0
+            lastMirrorH = 0
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             runOnUiThread {
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
@@ -98,9 +114,25 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         )
     }
     private lateinit var photoView: ImageView
+    private lateinit var overlayContent: LinearLayout
+    private val sayView: TextView by lazy {
+        TextView(this).apply {
+            textSize = 64f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(200, 0, 0, 0))
+            setPadding(80, 80, 80, 80)
+            visibility = android.view.View.GONE
+        }
+    }
+    private val hideSay = Runnable { sayView.visibility = android.view.View.GONE }
+    private lateinit var trackArt: ImageView
+    private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
     private var airplayInfoRef: AirPlayInfo? = null
     private var serverUrl = ""
+    private lateinit var qrView: ImageView
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var baseLabel = ""
 
     // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
@@ -146,6 +178,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_ENDED && !airplayVideoActive && uploadQueue.isNotEmpty()) {
+                        playNext()
+                        return
+                    }
                     if (!airplayVideoActive) return
                     if (state == Player.STATE_READY && (pendingStartSec >= 0 || pendingStartFrac >= 0)) {
                         val dur = p.duration
@@ -180,6 +216,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         serverUrl = url
 
         val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
+        qrView = qr
         val label = TextView(this).apply {
             text = baseLabelText()
             textSize = 18f
@@ -187,15 +224,30 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        trackArt = ImageView(this).apply { visibility = android.view.View.GONE }
+        trackText = TextView(this).apply {
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 16, 0, 0)
+            visibility = android.view.View.GONE
+        }
         infoLabel = label
         baseLabel = label.text.toString()
         updateAutostartHint()
+        overlayContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(qr, LinearLayout.LayoutParams(380, 380))
+            addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(trackArt, LinearLayout.LayoutParams(260, 260).apply { topMargin = 24 })
+            addView(trackText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        }
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
-            addView(qr, LinearLayout.LayoutParams(380, 380))
-            addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(overlayContent, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
 
         mirrorView = SurfaceView(this).apply {
@@ -229,8 +281,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             )
             addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
+        // Ekran doner ya da yerlesim degisirse (configChanges oldugu icin Activity yeniden olusmaz) yansitmayi yeniden sigdir.
+        rootLayout.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if ((r - l != oldR - oldL || b - t != oldB - oldT) && lastMirrorW > 0 && lastMirrorH > 0) {
+                fitMirror(lastMirrorW, lastMirrorH)
+            }
+        }
 
         try {
             server = VideoServer(
@@ -239,6 +298,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 pin,
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
+                { text -> runOnUiThread { say(text) } },
                 { file -> acceptApk(file) },
                 approvals,
                 this
@@ -257,11 +317,49 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             appendLog("AirPlay başlamadı: ${e.message}")
         }
 
+        watchNetwork()
+        mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         updater.check()
     }
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
+
+    override fun deviceConnected(name: String?) {
+        runOnUiThread {
+            Toast.makeText(this, "👋 " + (name ?: "iPhone"), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun audioTrack(info: TrackInfo) {
+        runOnUiThread {
+            val text = listOfNotNull(info.title, info.artist, info.album).joinToString("\n")
+            trackText.text = text
+            trackText.visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+    }
+
+    override fun audioArt(image: ByteArray?) {
+        val bmp = image?.let { decodeScaled(it) }
+        runOnUiThread {
+            if (bmp == null) {
+                trackArt.setImageDrawable(null)
+                trackArt.visibility = android.view.View.GONE
+            } else {
+                trackArt.setImageBitmap(bmp)
+                trackArt.visibility = android.view.View.VISIBLE
+            }
+        }
+    }
+
+    override fun audioEnded() {
+        runOnUiThread {
+            trackText.text = ""
+            trackText.visibility = android.view.View.GONE
+            trackArt.setImageDrawable(null)
+            trackArt.visibility = android.view.View.GONE
+        }
+    }
 
     override fun videoPlay(url: String, startSeconds: Double, startFraction: Double) {
         runOnUiThread {
@@ -377,17 +475,77 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yansitilan goruntuyu en-boy oranini bozmadan ekrana sigdirir (kenarlarda siyah bosluk). */
+    private var lastMirrorW = 0
+    private var lastMirrorH = 0
+
+    // Yansitma yakinlastirma: 1x = ekrana sigdir; buyudukce goruntu ekrandan tasar ve kaydirilabilir.
+    private var mirrorZoom = 1f
+    private var panX = 0f
+    private var panY = 0f
+
     private fun fitMirror(videoW: Int, videoH: Int) {
+        lastMirrorW = videoW
+        lastMirrorH = videoH
         val cw = rootLayout.width
         val ch = rootLayout.height
         if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
-        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
-        val lp = FrameLayout.LayoutParams(
-            (videoW * scale).toInt().coerceAtLeast(1),
-            (videoH * scale).toInt().coerceAtLeast(1),
-            Gravity.CENTER
-        )
+        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH) * mirrorZoom
+        val w = (videoW * scale).toInt().coerceAtLeast(1)
+        val h = (videoH * scale).toInt().coerceAtLeast(1)
+        val maxPanX = maxOf(0f, (w - cw) / 2f)
+        val maxPanY = maxOf(0f, (h - ch) / 2f)
+        panX = panX.coerceIn(-maxPanX, maxPanX)
+        panY = panY.coerceIn(-maxPanY, maxPanY)
+        val lp = FrameLayout.LayoutParams(w, h, Gravity.TOP or Gravity.START)
+        lp.leftMargin = ((cw - w) / 2f + panX).toInt()
+        lp.topMargin = ((ch - h) / 2f + panY).toInt()
         mirrorView.layoutParams = lp
+    }
+
+    private fun setMirrorZoom(z: Float) {
+        mirrorZoom = z.coerceIn(1f, 4f)
+        if (mirrorZoom == 1f) {
+            panX = 0f
+            panY = 0f
+        }
+        if (lastMirrorW > 0 && lastMirrorH > 0) fitMirror(lastMirrorW, lastMirrorH)
+    }
+
+    private val scaleDetector by lazy {
+        android.view.ScaleGestureDetector(this, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                setMirrorZoom(mirrorZoom * detector.scaleFactor)
+                return true
+            }
+        })
+    }
+    private var touchX = 0f
+    private var touchY = 0f
+
+    /** Yansitma sirasinda iki parmakla yakinlastirma, yakinlasinca tek parmakla kaydirma. */
+    private fun mirrorTouch(ev: MotionEvent) {
+        scaleDetector.onTouchEvent(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchX = ev.x
+                touchY = ev.y
+            }
+            MotionEvent.ACTION_MOVE -> if (ev.pointerCount == 1 && mirrorZoom > 1f) {
+                panX += ev.x - touchX
+                panY += ev.y - touchY
+                touchX = ev.x
+                touchY = ev.y
+                fitMirror(lastMirrorW, lastMirrorH)
+            }
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
+                // Parmak kalkinca kalan parmagin konumundan devam et (ani siçrama olmasin).
+                val i = if (ev.actionIndex == 0) 1 else 0
+                if (ev.pointerCount > 1) {
+                    touchX = ev.getX(i)
+                    touchY = ev.getY(i)
+                }
+            }
+        }
     }
 
     /** Gunluk yalnizca bellekte tutulur; /log sayfasindan okunur, TV ekraninda gosterilmez. */
@@ -430,7 +588,121 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    /** Web sayfasindan gelen mesaji ekranda 20 sn buyuk yazi olarak gosterir (bos metin kaldirir). */
+    private fun say(text: String) {
+        mainHandler.removeCallbacks(hideSay)
+        if (text.isEmpty()) {
+            sayView.visibility = android.view.View.GONE
+            return
+        }
+        sayView.text = text
+        sayView.visibility = android.view.View.VISIBLE
+        mainHandler.postDelayed(hideSay, 20_000L)
+        appendLog("Mesaj gösterildi")
+    }
+
+    // ---- Bosta kalinca zıplayan QR (DVD logosu gibi; ekran yanmasini da onler) ---------------
+
+    private var idleSince = SystemClock.elapsedRealtime()
+    private var bouncing = false
+    private var bx = 0f
+    private var by = 0f
+    private var bvx = 4f
+    private var bvy = 3f
+    private val bounceColors = intArrayOf(
+        Color.WHITE, Color.rgb(255, 99, 132), Color.rgb(54, 162, 235), Color.rgb(255, 206, 86),
+        Color.rgb(75, 192, 120), Color.rgb(153, 102, 255), Color.rgb(255, 159, 64)
+    )
+    private var bounceColor = 0
+
+    private val bounceTicker = object : Runnable {
+        override fun run() {
+            bounceStep()
+            mainHandler.postDelayed(this, 40)
+        }
+    }
+
+    private fun bounceStep() {
+        val now = SystemClock.elapsedRealtime()
+        if (overlayView.visibility != android.view.View.VISIBLE) {
+            idleSince = now
+            if (bouncing) stopBounce()
+            return
+        }
+        if (now - idleSince < 20_000L) return
+        bouncing = true
+        val maxX = (overlayView.width - overlayContent.width) / 2f
+        val maxY = (overlayView.height - overlayContent.height) / 2f
+        var hitX = false
+        var hitY = false
+        bx += bvx
+        by += bvy
+        if (maxX <= 0f) bx = 0f
+        else if (bx > maxX) { bx = maxX; bvx = -bvx; hitX = true }
+        else if (bx < -maxX) { bx = -maxX; bvx = -bvx; hitX = true }
+        if (maxY <= 0f) by = 0f
+        else if (by > maxY) { by = maxY; bvy = -bvy; hitY = true }
+        else if (by < -maxY) { by = -maxY; bvy = -bvy; hitY = true }
+        if (hitX || hitY) {
+            bounceColor = (bounceColor + 1) % bounceColors.size
+            infoLabel.setTextColor(bounceColors[bounceColor])
+            trackText.setTextColor(bounceColors[bounceColor])
+            if (hitX && hitY) Toast.makeText(this, "🎉", Toast.LENGTH_SHORT).show()
+        }
+        overlayContent.translationX = bx
+        overlayContent.translationY = by
+    }
+
+    private fun stopBounce() {
+        bouncing = false
+        bx = 0f
+        by = 0f
+        overlayContent.translationX = 0f
+        overlayContent.translationY = 0f
+        infoLabel.setTextColor(Color.WHITE)
+        trackText.setTextColor(Color.WHITE)
+    }
+
+    private fun userActivity() {
+        idleSince = SystemClock.elapsedRealtime()
+        if (bouncing) stopBounce()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        userActivity()
+        if (mirrorActive && lastMirrorW > 0) mirrorTouch(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
+    private val uploadQueue = ArrayDeque<Upload>()
+    private var currentUpload: Upload? = null
+
     private fun play(upload: Upload) {
+        val p = player
+        val busy = p != null && currentUpload != null && !airplayVideoActive &&
+            p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED
+        if (upload.queued && busy) {
+            uploadQueue.addLast(upload)
+            appendLog("Kuyruğa eklendi (${uploadQueue.size} bekliyor)")
+            return
+        }
+        uploadQueue.clear()
+        start(upload)
+    }
+
+    /** Siradaki videoya gecer; sira bossa false doner. */
+    private fun playNext(): Boolean {
+        val next = uploadQueue.removeFirstOrNull() ?: return false
+        val old = currentUpload
+        start(next)
+        if (old != null && old !== next) runCatching { old.file.delete() }
+        appendLog("Sıradaki video (${uploadQueue.size} bekliyor)")
+        return true
+    }
+
+    private fun start(upload: Upload) {
+        currentUpload = upload
         overlayView.visibility = android.view.View.GONE
         val factory = DataSource.Factory { GrowingFileDataSource(upload) }
         val source = ProgressiveMediaSource.Factory(factory)
@@ -460,7 +732,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             "voldown" -> audio.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI
             )
+            "zoomin" -> setMirrorZoom(mirrorZoom * 1.25f)
+            "zoomout" -> setMirrorZoom(mirrorZoom / 1.25f)
+            "zoomreset" -> setMirrorZoom(1f)
+            "next" -> if (!playNext()) {
+                p.stop()
+                overlayView.visibility = android.view.View.VISIBLE
+            }
             "stop" -> {
+                uploadQueue.clear()
                 p.stop()
                 overlayView.visibility = android.view.View.VISIBLE
             }
@@ -487,7 +767,22 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
+    /** Tam ekran: durum ve gezinme cubuklari gizlenir (telefonda yansitma tum ekrani kullansin). */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val wasBouncing = bouncing
+        userActivity()
+        // Ziplayan QR'i durduran OK tusu ayri bir islem (otomatik baslatma degisimi) tetiklemesin.
+        if (wasBouncing && isOkKey(keyCode)) return true
         if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
@@ -501,7 +796,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
         }
-        if (mirrorActive && isOkKey(keyCode)) {
+        if (mirrorActive && isOkKey(keyCode) && event.repeatCount == 0) {
             SyncSettings.jitterBufferMs = SyncSettings.AUTO
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
             val text = getString(R.string.jitter_auto, SyncSettings.autoJitterMs.toString())
@@ -581,13 +876,54 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             photoView.visibility = android.view.View.GONE
             if (airplayVideoActive) endAirplayVideo()
             airplayServer?.stopAllMirrors()
+            // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
+            mirrorActive = false
+            lastMirrorW = 0
+            lastMirrorH = 0
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()
         }
     }
 
+    /** Wi-Fi/DHCP degisince adresi, QR'i ve etiketi tazeler. */
+    private fun watchNetwork() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = refreshAddress()
+            override fun onLinkPropertiesChanged(network: Network, lp: android.net.LinkProperties) = refreshAddress()
+        }
+        try {
+            cm.registerNetworkCallback(NetworkRequest.Builder().build(), cb)
+            netCallback = cb
+        } catch (e: Exception) {
+            appendLog("Ağ izleme başlatılamadı: ${e.message}")
+        }
+    }
+
+    private fun refreshAddress() {
+        val url = try {
+            "http://${localIp()}:$port"
+        } catch (e: Exception) {
+            return
+        }
+        runOnUiThread {
+            if (url == serverUrl || url.startsWith("http://0.0.0.0")) return@runOnUiThread
+            serverUrl = url
+            qrView.setImageBitmap(qrBitmap("$url/?pin=$pin", 600))
+            baseLabel = baseLabelText()
+            updateAutostartHint()
+            appendLog("Adres değişti: $url")
+        }
+    }
+
     override fun onDestroy() {
+        netCallback?.let { cb ->
+            runCatching { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(cb) }
+        }
         mainHandler.removeCallbacksAndMessages(null)
         server?.stop()
         airplayServer?.stop()
@@ -599,7 +935,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun localIp(): String =
         NetworkInterface.getNetworkInterfaces().toList()
             .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+            .filter { !it.isLoopbackAddress && it is Inet4Address }
+            .let { l -> l.firstOrNull { it.isSiteLocalAddress } ?: l.firstOrNull() }
             ?.hostAddress ?: "0.0.0.0"
 
     private fun qrBitmap(text: String, size: Int): Bitmap {

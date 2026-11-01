@@ -56,7 +56,21 @@ iPhone'un AirPlay listesinde görünen ad varsayılan olarak "TV Alici"dır. De�
 
 Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep izin ver / Reddet** penceresi çıkar (uzaktan kumandayla ya da dokunarak seçilir). 30 saniye içinde cevap gelmezse ya da reddedilirse bağlantı kesilir ve aynı cihaz 1 dakika boyunca tekrar sorulmaz. "Hep izin ver" cihazın IP adresini kalıcı olarak güvenilir yapar.
 
+"Hep izin ver" denilen bir cihaz 30 gün hiç bağlanmazsa güveni kendiliğinden kalkar ve bir sonraki bağlantıda yeniden sorulur; düzenli kullanılan cihazın süresi her kullanımda yenilenir.
+
 Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
+
+## Yansıtmada yakınlaştırma
+
+Ekran yansıtırken görüntü varsayılan olarak ekrana sığdırılır (kenarlarda siyah boşluk kalabilir). Dokunmatik ekranda iki parmakla sıkıştırarak 4 katına kadar yakınlaştırabilir, yakınlaşınca tek parmakla kaydırabilirsiniz. Dokunmatik olmayan cihazlarda web sayfasının Gönder sekmesindeki **🔍+ / 🔍− / 1×** düğmeleri aynı işi yapar (merkeze doğru yakınlaştırır). Yansıtma bitince ya da yeniden başlayınca yakınlaştırma sıfırlanır.
+
+## Bağlanan cihaza selam
+
+Bir iPhone ya da iPad ekran yansıtma/ses için bağlanınca TV'de kısa bir 👋 bildirimi cihazın adıyla görünür (ad gelmezse "iPhone").
+
+## Boştayken zıplayan QR
+
+QR ekranı 20 saniye boşta (tuşa basılmadan, dokunulmadan) kalırsa QR kodu ve yazılar eski DVD logosu gibi ekranda sekmeye başlar, duvara çarpınca renk değiştirir ve köşeye tam isabet ederse 🎉 çıkar. Aynı zamanda ekran yanmasını önler. Herhangi bir tuşa basınca ya da dokununca durur ve QR yerine döner; bir bağlantı başlayınca ekran zaten değişir.
 
 ## Açılışta otomatik başlatma
 
@@ -76,7 +90,8 @@ AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proj
 
 Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada olduğu tek bir sayfa açar; üstte PIN alanı, altında sırayla şu bölümler vardır:
 
-- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan).
+- **TV'ye mesaj:** Yazılan kısa metin TV ekranında 20 saniye büyük yazıyla görünür ("Yemek hazır" gibi); boş gönderince kalkar.
+- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan). Birden fazla video seçilirse ilki hemen oynar, diğerleri sırayla yüklenip bitince otomatik oynatılır; **Sonraki** düğmesi bir sonraki videoya atlar, **Durdur** sırayı da temizler.
 - **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
 - **Uygulamayı güncelle:** Release anahtarıyla imzalı APK'yı tarayıcıdan gönderme (aşağıya bakın).
 - **Günlük:** Uygulama günlüğü (açılır bölüm; **Yenile** ile güncellenir).
