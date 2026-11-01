@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 日本語 -->
+<resources>
+    <string name="approval_title">接続リクエスト</string>
+    <string name="approval_message">%1$s のデバイスがこのテレビに接続しようとしています。</string>
+    <string name="approval_once">許可</string>
+    <string name="approval_always">常に許可</string>
+    <string name="approval_deny">拒否</string>
+    <string name="update_available_title">アップデートがあります</string>
+    <string name="update_available_message">新しいバージョン: v%1$s(現在: v%2$s)。ダウンロードしてインストールしますか?</string>
+    <string name="update_btn">アップデート</string>
+    <string name="update_later">後で</string>
+    <string name="updating_title">アップデート中</string>
+    <string name="downloading">ダウンロード中…</string>
+    <string name="downloading_percent">ダウンロード中… %1$s%%</string>
+    <string name="update_rejected">アップデートはインストールされませんでした: %1$s</string>
+    <string name="download_failed">ダウンロードに失敗しました: %1$s</string>
+    <string name="install_screen_failed">インストール画面を開けませんでした: %1$s</string>
+    <string name="apk_unreadable">APK を読み込めませんでした</string>
+    <string name="pkg_mismatch">パッケージ名が一致しません</string>
+    <string name="version_mismatch">バージョン番号が一致しません</string>
+    <string name="no_signature">署名情報がありません</string>
+    <string name="multiple_signers">複数の署名者がいます</string>
+    <string name="signature_failed">署名を検証できませんでした</string>
+    <string name="older_version">インストール済みのバージョン(v%1$s)より古い(v%2$s)</string>
+    <string name="unknown_sources_toast">まずこのアプリに提供元不明のアプリのインストールを許可してから、もう一度アップデートしてください。</string>
+    <string name="unknown_sources_web">このアプリはテレビで提供元不明のアプリをインストールする許可がありません。テレビで許可画面を開きました。許可してから APK をもう一度送信してください。</string>
+    <string name="jitter_off">映像バッファ: オフ(OK = 自動)</string>
+    <string name="jitter_manual">映像バッファ: %1$s ms、手動(OK = 自動。音声も同じだけ遅れます)</string>
+    <string name="jitter_auto">映像バッファ: 自動(現在 %1$s ms)</string>
+    <string name="sync_video_late">音声/映像: 映像が %1$s ms 遅れています</string>
+    <string name="sync_audio_late">音声/映像: 音声が %1$s ms 遅れています</string>
+    <string name="sync_none">音声/映像: 調整なし(0 ms)</string>
+    <string name="autostart_toast">電源オン時の自動起動: %1$s</string>
+    <string name="on">オン</string>
+    <string name="off">オフ</string>
+    <string name="qr_hint">iPhone のカメラで QR コードを読み取ってください\nアドレス: %1$s   PIN: %2$s\nAirPlay 名: %3$s</string>
+    <string name="autostart_hint">電源オン時に起動: %1$s(MENU または OK を押す)</string>
+</resources>

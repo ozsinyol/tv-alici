@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Deutsch -->
+<resources>
+    <string name="approval_title">Verbindungsanfrage</string>
+    <string name="approval_message">Das Gerät unter %1$s möchte sich mit diesem Fernseher verbinden.</string>
+    <string name="approval_once">Erlauben</string>
+    <string name="approval_always">Immer erlauben</string>
+    <string name="approval_deny">Ablehnen</string>
+    <string name="update_available_title">Update verfügbar</string>
+    <string name="update_available_message">Neue Version: v%1$s (aktuell: v%2$s). Herunterladen und installieren?</string>
+    <string name="update_btn">Aktualisieren</string>
+    <string name="update_later">Später</string>
+    <string name="updating_title">Aktualisierung läuft</string>
+    <string name="downloading">Wird heruntergeladen…</string>
+    <string name="downloading_percent">Wird heruntergeladen… %1$s%%</string>
+    <string name="update_rejected">Update nicht installiert: %1$s</string>
+    <string name="download_failed">Download fehlgeschlagen: %1$s</string>
+    <string name="install_screen_failed">Installationsbildschirm konnte nicht geöffnet werden: %1$s</string>
+    <string name="apk_unreadable">APK konnte nicht gelesen werden</string>
+    <string name="pkg_mismatch">Paketname stimmt nicht überein</string>
+    <string name="version_mismatch">Versionsnummer stimmt nicht überein</string>
+    <string name="no_signature">keine Signaturinformationen</string>
+    <string name="multiple_signers">mehrere Signaturgeber</string>
+    <string name="signature_failed">Signatur konnte nicht verifiziert werden</string>
+    <string name="older_version">älter (v%2$s) als die installierte Version (v%1$s)</string>
+    <string name="unknown_sources_toast">Erlaube dieser App zuerst die Installation aus unbekannten Quellen und versuche das Update dann erneut.</string>
+    <string name="unknown_sources_web">Diese App darf auf dem Fernseher nicht aus unbekannten Quellen installieren; der Berechtigungsbildschirm wurde auf dem Fernseher geöffnet. Erteile die Berechtigung und sende die APK erneut.</string>
+    <string name="jitter_off">Videopuffer: aus (OK = automatisch)</string>
+    <string name="jitter_manual">Videopuffer: %1$s ms, manuell (OK = automatisch; der Ton wird gleich stark verzögert)</string>
+    <string name="jitter_auto">Videopuffer: automatisch (derzeit %1$s ms)</string>
+    <string name="sync_video_late">Ton/Bild: Bild um %1$s ms verzögert</string>
+    <string name="sync_audio_late">Ton/Bild: Ton um %1$s ms verzögert</string>
+    <string name="sync_none">Ton/Bild: keine Anpassung (0 ms)</string>
+    <string name="autostart_toast">Autostart beim Einschalten: %1$s</string>
+    <string name="on">an</string>
+    <string name="off">aus</string>
+    <string name="qr_hint">Scanne den QR-Code mit der iPhone-Kamera\nAdresse: %1$s   PIN: %2$s\nAirPlay-Name: %3$s</string>
+    <string name="autostart_hint">Beim Einschalten starten: %1$s (MENU oder OK drücken)</string>
+</resources>

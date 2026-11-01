@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 中文(简体) -->
+<resources>
+    <string name="approval_title">连接请求</string>
+    <string name="approval_message">地址为 %1$s 的设备想要连接到这台电视。</string>
+    <string name="approval_once">允许</string>
+    <string name="approval_always">始终允许</string>
+    <string name="approval_deny">拒绝</string>
+    <string name="update_available_title">有可用更新</string>
+    <string name="update_available_message">新版本:v%1$s(当前:v%2$s)。是否下载并安装?</string>
+    <string name="update_btn">更新</string>
+    <string name="update_later">稍后</string>
+    <string name="updating_title">正在更新</string>
+    <string name="downloading">正在下载…</string>
+    <string name="downloading_percent">正在下载… %1$s%%</string>
+    <string name="update_rejected">更新未安装:%1$s</string>
+    <string name="download_failed">下载失败:%1$s</string>
+    <string name="install_screen_failed">无法打开安装界面:%1$s</string>
+    <string name="apk_unreadable">无法读取 APK</string>
+    <string name="pkg_mismatch">包名不匹配</string>
+    <string name="version_mismatch">版本号不匹配</string>
+    <string name="no_signature">没有签名信息</string>
+    <string name="multiple_signers">存在多个签名者</string>
+    <string name="signature_failed">无法验证签名</string>
+    <string name="older_version">比已安装的版本(v%1$s)旧(v%2$s)</string>
+    <string name="unknown_sources_toast">请先允许此应用安装未知来源的应用,然后再重试更新。</string>
+    <string name="unknown_sources_web">此应用在电视上没有安装未知来源应用的权限;电视上已打开权限界面。请授予权限后重新发送 APK。</string>
+    <string name="jitter_off">视频缓冲:关闭(OK = 自动)</string>
+    <string name="jitter_manual">视频缓冲:%1$s 毫秒,手动(OK = 自动;音频也会延迟相同时间)</string>
+    <string name="jitter_auto">视频缓冲:自动(当前 %1$s 毫秒)</string>
+    <string name="sync_video_late">音频/视频:视频延迟 %1$s 毫秒</string>
+    <string name="sync_audio_late">音频/视频:音频延迟 %1$s 毫秒</string>
+    <string name="sync_none">音频/视频:无调整(0 毫秒)</string>
+    <string name="autostart_toast">开机自动启动:%1$s</string>
+    <string name="on">开</string>
+    <string name="off">关</string>
+    <string name="qr_hint">请用 iPhone 相机扫描二维码\n地址:%1$s   PIN:%2$s\nAirPlay 名称:%3$s</string>
+    <string name="autostart_hint">开机启动:%1$s(按 MENU 或 OK)</string>
+</resources>

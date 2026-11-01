@@ -8,7 +8,7 @@ Uygulama açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfadan vi
 
 ## Diller
 
-Uygulama arayüzü ve web sayfası (8080) cihaz/tarayıcı diline uyar: **İngilizce** (varsayılan) ve **Türkçe**. English summary: [README.en.md](README.en.md). Yeni dil eklemek için `app/src/main/res/values-<kod>/strings.xml` oluşturun ve `VideoServer.kt` içindeki `DIL` tablosuna bir blok ekleyin. Geliştirici günlüğü Türkçe kalır.
+Uygulama arayüzü ve web sayfası (8080) cihaz/tarayıcı diline uyar: **İngilizce** (varsayılan), **Türkçe**, İspanyolca, Fransızca, Almanca, Portekizce, İtalyanca, Rusça, Japonca, Korece, Çince (Basitleştirilmiş) ve Arapça (sağdan sola). English summary: [README.en.md](README.en.md). Yeni dil eklemek için `app/src/main/res/values-<kod>/strings.xml` oluşturun ve `VideoServer.kt` içindeki `DIL` tablosuna bir blok ekleyin. Geliştirici günlüğü Türkçe kalır.
 
 ## APK'yı GitHub Actions ile derleme
 

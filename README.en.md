@@ -8,7 +8,7 @@ The full documentation is in Turkish: see [README.md](README.md).
 
 ## Languages
 
-The app UI and the web page (port 8080) follow the device/browser language: **English** (default) and **Turkish**. To add a language, create `app/src/main/res/values-<code>/strings.xml` (copy `values/strings.xml`) and add a block for it in the `DIL` table in `VideoServer.kt`. The developer log stays in Turkish.
+The app UI and the web page (port 8080) follow the device/browser language: **English** (default), **Turkish**, Spanish, French, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese (Simplified) and Arabic (right-to-left); other languages fall back to English. To add a language, create `app/src/main/res/values-<code>/strings.xml` (copy `values/strings.xml`) and add a block for it in the `DIL` table in `VideoServer.kt`. The developer log stays in Turkish.
 
 ## Quick start
 

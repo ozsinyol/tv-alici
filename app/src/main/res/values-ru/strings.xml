@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Русский -->
+<resources>
+    <string name="approval_title">Запрос на подключение</string>
+    <string name="approval_message">Устройство %1$s хочет подключиться к этому телевизору.</string>
+    <string name="approval_once">Разрешить</string>
+    <string name="approval_always">Всегда разрешать</string>
+    <string name="approval_deny">Отклонить</string>
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_available_message">Новая версия: v%1$s (текущая: v%2$s). Скачать и установить?</string>
+    <string name="update_btn">Обновить</string>
+    <string name="update_later">Позже</string>
+    <string name="updating_title">Обновление</string>
+    <string name="downloading">Загрузка…</string>
+    <string name="downloading_percent">Загрузка… %1$s%%</string>
+    <string name="update_rejected">Обновление не установлено: %1$s</string>
+    <string name="download_failed">Не удалось скачать: %1$s</string>
+    <string name="install_screen_failed">Не удалось открыть экран установки: %1$s</string>
+    <string name="apk_unreadable">Не удалось прочитать APK</string>
+    <string name="pkg_mismatch">имя пакета не совпадает</string>
+    <string name="version_mismatch">номер версии не совпадает</string>
+    <string name="no_signature">нет сведений о подписи</string>
+    <string name="multiple_signers">несколько подписей</string>
+    <string name="signature_failed">не удалось проверить подпись</string>
+    <string name="older_version">старше (v%2$s) установленной версии (v%1$s)</string>
+    <string name="unknown_sources_toast">Сначала разрешите этому приложению установку из неизвестных источников, затем повторите обновление.</string>
+    <string name="unknown_sources_web">Этому приложению не разрешена установка из неизвестных источников на телевизоре; экран разрешений открыт на телевизоре. Выдайте разрешение и отправьте APK снова.</string>
+    <string name="jitter_off">Буфер видео: выкл. (OK = авто)</string>
+    <string name="jitter_manual">Буфер видео: %1$s мс, вручную (OK = авто; звук задерживается на столько же)</string>
+    <string name="jitter_auto">Буфер видео: авто (сейчас %1$s мс)</string>
+    <string name="sync_video_late">Звук/видео: видео задерживается на %1$s мс</string>
+    <string name="sync_audio_late">Звук/видео: звук задерживается на %1$s мс</string>
+    <string name="sync_none">Звук/видео: без коррекции (0 мс)</string>
+    <string name="autostart_toast">Автозапуск при включении: %1$s</string>
+    <string name="on">вкл.</string>
+    <string name="off">выкл.</string>
+    <string name="qr_hint">Отсканируйте QR-код камерой iPhone\nАдрес: %1$s   PIN: %2$s\nИмя AirPlay: %3$s</string>
+    <string name="autostart_hint">Запуск при включении: %1$s (нажмите MENU или OK)</string>
+</resources>

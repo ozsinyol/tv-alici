@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Français -->
+<resources>
+    <string name="approval_title">Demande de connexion</string>
+    <string name="approval_message">L\'appareil à l\'adresse %1$s souhaite se connecter à ce téléviseur.</string>
+    <string name="approval_once">Autoriser</string>
+    <string name="approval_always">Toujours autoriser</string>
+    <string name="approval_deny">Refuser</string>
+    <string name="update_available_title">Mise à jour disponible</string>
+    <string name="update_available_message">Nouvelle version : v%1$s (actuelle : v%2$s). Télécharger et installer ?</string>
+    <string name="update_btn">Mettre à jour</string>
+    <string name="update_later">Plus tard</string>
+    <string name="updating_title">Mise à jour en cours</string>
+    <string name="downloading">Téléchargement…</string>
+    <string name="downloading_percent">Téléchargement… %1$s%%</string>
+    <string name="update_rejected">Mise à jour non installée : %1$s</string>
+    <string name="download_failed">Échec du téléchargement : %1$s</string>
+    <string name="install_screen_failed">Impossible d\'ouvrir l\'écran d\'installation : %1$s</string>
+    <string name="apk_unreadable">Impossible de lire l\'APK</string>
+    <string name="pkg_mismatch">le nom du paquet ne correspond pas</string>
+    <string name="version_mismatch">le numéro de version ne correspond pas</string>
+    <string name="no_signature">aucune information de signature</string>
+    <string name="multiple_signers">plusieurs signataires</string>
+    <string name="signature_failed">la signature n\'a pas pu être vérifiée</string>
+    <string name="older_version">antérieure (v%2$s) à la version installée (v%1$s)</string>
+    <string name="unknown_sources_toast">Autorisez d\'abord cette application à installer depuis des sources inconnues, puis réessayez la mise à jour.</string>
+    <string name="unknown_sources_web">Cette application n\'est pas autorisée à installer depuis des sources inconnues sur le téléviseur ; l\'écran d\'autorisation s\'est ouvert sur le téléviseur. Accordez l\'autorisation puis renvoyez l\'APK.</string>
+    <string name="jitter_off">Tampon vidéo : désactivé (OK = automatique)</string>
+    <string name="jitter_manual">Tampon vidéo : %1$s ms, manuel (OK = automatique ; l\'audio est retardé d\'autant)</string>
+    <string name="jitter_auto">Tampon vidéo : automatique (actuellement %1$s ms)</string>
+    <string name="sync_video_late">Audio/vidéo : la vidéo est retardée de %1$s ms</string>
+    <string name="sync_audio_late">Audio/vidéo : l\'audio est retardé de %1$s ms</string>
+    <string name="sync_none">Audio/vidéo : aucun réglage (0 ms)</string>
+    <string name="autostart_toast">Démarrage automatique à l\'allumage : %1$s</string>
+    <string name="on">activé</string>
+    <string name="off">désactivé</string>
+    <string name="qr_hint">Scannez le code QR avec l\'appareil photo de l\'iPhone\nAdresse : %1$s   PIN : %2$s\nNom AirPlay : %3$s</string>
+    <string name="autostart_hint">Démarrer à l\'allumage : %1$s (appuyez sur MENU ou OK)</string>
+</resources>

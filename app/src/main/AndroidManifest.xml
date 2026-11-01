@@ -12,6 +12,7 @@
 
     <application
         android:label="AirPlay for Android"
+        android:supportsRtl="true"
         android:icon="@drawable/ic_launcher"
         android:banner="@drawable/banner"
         android:usesCleartextTraffic="true"

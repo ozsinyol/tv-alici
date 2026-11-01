@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Italiano -->
+<resources>
+    <string name="approval_title">Richiesta di connessione</string>
+    <string name="approval_message">Il dispositivo all\'indirizzo %1$s vuole connettersi a questa TV.</string>
+    <string name="approval_once">Consenti</string>
+    <string name="approval_always">Consenti sempre</string>
+    <string name="approval_deny">Rifiuta</string>
+    <string name="update_available_title">Aggiornamento disponibile</string>
+    <string name="update_available_message">Nuova versione: v%1$s (attuale: v%2$s). Scaricare e installare?</string>
+    <string name="update_btn">Aggiorna</string>
+    <string name="update_later">Più tardi</string>
+    <string name="updating_title">Aggiornamento in corso</string>
+    <string name="downloading">Download in corso…</string>
+    <string name="downloading_percent">Download in corso… %1$s%%</string>
+    <string name="update_rejected">Aggiornamento non installato: %1$s</string>
+    <string name="download_failed">Download non riuscito: %1$s</string>
+    <string name="install_screen_failed">Impossibile aprire la schermata di installazione: %1$s</string>
+    <string name="apk_unreadable">Impossibile leggere l\'APK</string>
+    <string name="pkg_mismatch">il nome del pacchetto non corrisponde</string>
+    <string name="version_mismatch">il numero di versione non corrisponde</string>
+    <string name="no_signature">nessuna informazione sulla firma</string>
+    <string name="multiple_signers">più firmatari</string>
+    <string name="signature_failed">impossibile verificare la firma</string>
+    <string name="older_version">precedente (v%2$s) alla versione installata (v%1$s)</string>
+    <string name="unknown_sources_toast">Consenti prima a questa app di installare da fonti sconosciute, poi riprova l\'aggiornamento.</string>
+    <string name="unknown_sources_web">Questa app non è autorizzata a installare da fonti sconosciute sulla TV; la schermata dei permessi è stata aperta sulla TV. Concedi il permesso e invia di nuovo l\'APK.</string>
+    <string name="jitter_off">Buffer video: disattivato (OK = automatico)</string>
+    <string name="jitter_manual">Buffer video: %1$s ms, manuale (OK = automatico; anche l\'audio viene ritardato della stessa quantità)</string>
+    <string name="jitter_auto">Buffer video: automatico (ora %1$s ms)</string>
+    <string name="sync_video_late">Audio/video: video in ritardo di %1$s ms</string>
+    <string name="sync_audio_late">Audio/video: audio in ritardo di %1$s ms</string>
+    <string name="sync_none">Audio/video: nessuna regolazione (0 ms)</string>
+    <string name="autostart_toast">Avvio automatico all\'accensione: %1$s</string>
+    <string name="on">attivo</string>
+    <string name="off">disattivato</string>
+    <string name="qr_hint">Inquadra il codice QR con la fotocamera dell\'iPhone\nIndirizzo: %1$s   PIN: %2$s\nNome AirPlay: %3$s</string>
+    <string name="autostart_hint">Avvia all\'accensione: %1$s (premi MENU o OK)</string>
+</resources>

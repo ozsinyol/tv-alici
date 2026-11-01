@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Português -->
+<resources>
+    <string name="approval_title">Pedido de conexão</string>
+    <string name="approval_message">O dispositivo em %1$s quer se conectar a esta TV.</string>
+    <string name="approval_once">Permitir</string>
+    <string name="approval_always">Permitir sempre</string>
+    <string name="approval_deny">Negar</string>
+    <string name="update_available_title">Atualização disponível</string>
+    <string name="update_available_message">Nova versão: v%1$s (atual: v%2$s). Baixar e instalar?</string>
+    <string name="update_btn">Atualizar</string>
+    <string name="update_later">Depois</string>
+    <string name="updating_title">Atualizando</string>
+    <string name="downloading">Baixando…</string>
+    <string name="downloading_percent">Baixando… %1$s%%</string>
+    <string name="update_rejected">Atualização não instalada: %1$s</string>
+    <string name="download_failed">Falha no download: %1$s</string>
+    <string name="install_screen_failed">Não foi possível abrir a tela de instalação: %1$s</string>
+    <string name="apk_unreadable">Não foi possível ler o APK</string>
+    <string name="pkg_mismatch">o nome do pacote não confere</string>
+    <string name="version_mismatch">o número da versão não confere</string>
+    <string name="no_signature">sem informações de assinatura</string>
+    <string name="multiple_signers">vários assinantes</string>
+    <string name="signature_failed">não foi possível verificar a assinatura</string>
+    <string name="older_version">anterior (v%2$s) à versão instalada (v%1$s)</string>
+    <string name="unknown_sources_toast">Primeiro permita que este app instale de fontes desconhecidas e tente a atualização novamente.</string>
+    <string name="unknown_sources_web">Este app não tem permissão para instalar de fontes desconhecidas na TV; a tela de permissão foi aberta na TV. Conceda a permissão e envie o APK novamente.</string>
+    <string name="jitter_off">Buffer de vídeo: desligado (OK = automático)</string>
+    <string name="jitter_manual">Buffer de vídeo: %1$s ms, manual (OK = automático; o áudio atrasa o mesmo tanto)</string>
+    <string name="jitter_auto">Buffer de vídeo: automático (agora %1$s ms)</string>
+    <string name="sync_video_late">Áudio/vídeo: vídeo atrasado em %1$s ms</string>
+    <string name="sync_audio_late">Áudio/vídeo: áudio atrasado em %1$s ms</string>
+    <string name="sync_none">Áudio/vídeo: sem ajuste (0 ms)</string>
+    <string name="autostart_toast">Iniciar automaticamente ao ligar: %1$s</string>
+    <string name="on">ativado</string>
+    <string name="off">desativado</string>
+    <string name="qr_hint">Escaneie o código QR com a câmera do iPhone\nEndereço: %1$s   PIN: %2$s\nNome do AirPlay: %3$s</string>
+    <string name="autostart_hint">Iniciar ao ligar: %1$s (pressione MENU ou OK)</string>
+</resources>

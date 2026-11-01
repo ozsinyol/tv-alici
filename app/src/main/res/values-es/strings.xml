@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Español -->
+<resources>
+    <string name="approval_title">Solicitud de conexión</string>
+    <string name="approval_message">El dispositivo en %1$s quiere conectarse a este televisor.</string>
+    <string name="approval_once">Permitir</string>
+    <string name="approval_always">Permitir siempre</string>
+    <string name="approval_deny">Denegar</string>
+    <string name="update_available_title">Actualización disponible</string>
+    <string name="update_available_message">Nueva versión: v%1$s (actual: v%2$s). ¿Descargar e instalar?</string>
+    <string name="update_btn">Actualizar</string>
+    <string name="update_later">Más tarde</string>
+    <string name="updating_title">Actualizando</string>
+    <string name="downloading">Descargando…</string>
+    <string name="downloading_percent">Descargando… %1$s%%</string>
+    <string name="update_rejected">Actualización no instalada: %1$s</string>
+    <string name="download_failed">Error de descarga: %1$s</string>
+    <string name="install_screen_failed">No se pudo abrir la pantalla de instalación: %1$s</string>
+    <string name="apk_unreadable">No se pudo leer el APK</string>
+    <string name="pkg_mismatch">el nombre del paquete no coincide</string>
+    <string name="version_mismatch">el número de versión no coincide</string>
+    <string name="no_signature">sin información de firma</string>
+    <string name="multiple_signers">varias firmas</string>
+    <string name="signature_failed">no se pudo verificar la firma</string>
+    <string name="older_version">anterior (v%2$s) a la versión instalada (v%1$s)</string>
+    <string name="unknown_sources_toast">Primero permite que esta app instale desde orígenes desconocidos y vuelve a intentar la actualización.</string>
+    <string name="unknown_sources_web">Esta app no tiene permiso para instalar desde orígenes desconocidos en el televisor; se abrió la pantalla de permisos en el televisor. Concédelo y envía el APK de nuevo.</string>
+    <string name="jitter_off">Búfer de vídeo: desactivado (OK = automático)</string>
+    <string name="jitter_manual">Búfer de vídeo: %1$s ms, manual (OK = automático; el audio se retrasa lo mismo)</string>
+    <string name="jitter_auto">Búfer de vídeo: automático (ahora %1$s ms)</string>
+    <string name="sync_video_late">Audio/vídeo: el vídeo se retrasa %1$s ms</string>
+    <string name="sync_audio_late">Audio/vídeo: el audio se retrasa %1$s ms</string>
+    <string name="sync_none">Audio/vídeo: sin ajuste (0 ms)</string>
+    <string name="autostart_toast">Inicio automático al encender: %1$s</string>
+    <string name="on">activado</string>
+    <string name="off">desactivado</string>
+    <string name="qr_hint">Escanea el código QR con la cámara del iPhone\nDirección: %1$s   PIN: %2$s\nNombre de AirPlay: %3$s</string>
+    <string name="autostart_hint">Iniciar al encender: %1$s (pulsa MENU u OK)</string>
+</resources>

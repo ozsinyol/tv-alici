@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- العربية -->
+<resources>
+    <string name="approval_title">طلب اتصال</string>
+    <string name="approval_message">الجهاز على العنوان %1$s يريد الاتصال بهذا التلفاز.</string>
+    <string name="approval_once">السماح</string>
+    <string name="approval_always">السماح دائمًا</string>
+    <string name="approval_deny">رفض</string>
+    <string name="update_available_title">يتوفر تحديث</string>
+    <string name="update_available_message">الإصدار الجديد: v%1$s (الحالي: v%2$s). هل تريد التنزيل والتثبيت؟</string>
+    <string name="update_btn">تحديث</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="updating_title">جارٍ التحديث</string>
+    <string name="downloading">جارٍ التنزيل…</string>
+    <string name="downloading_percent">جارٍ التنزيل… %1$s%%</string>
+    <string name="update_rejected">لم يتم تثبيت التحديث: %1$s</string>
+    <string name="download_failed">فشل التنزيل: %1$s</string>
+    <string name="install_screen_failed">تعذّر فتح شاشة التثبيت: %1$s</string>
+    <string name="apk_unreadable">تعذّرت قراءة ملف APK</string>
+    <string name="pkg_mismatch">اسم الحزمة غير مطابق</string>
+    <string name="version_mismatch">رقم الإصدار غير مطابق</string>
+    <string name="no_signature">لا توجد معلومات توقيع</string>
+    <string name="multiple_signers">يوجد أكثر من موقِّع</string>
+    <string name="signature_failed">تعذّر التحقق من التوقيع</string>
+    <string name="older_version">أقدم (v%2$s) من الإصدار المثبّت (v%1$s)</string>
+    <string name="unknown_sources_toast">اسمح أولًا لهذا التطبيق بالتثبيت من مصادر غير معروفة، ثم أعد محاولة التحديث.</string>
+    <string name="unknown_sources_web">هذا التطبيق غير مسموح له بالتثبيت من مصادر غير معروفة على التلفاز؛ تم فتح شاشة الأذونات على التلفاز. امنح الإذن ثم أرسل ملف APK مرة أخرى.</string>
+    <string name="jitter_off">مخزن الفيديو المؤقت: متوقف (OK = تلقائي)</string>
+    <string name="jitter_manual">مخزن الفيديو المؤقت: %1$s مللي ثانية، يدوي (OK = تلقائي؛ يتأخر الصوت بالمقدار نفسه)</string>
+    <string name="jitter_auto">مخزن الفيديو المؤقت: تلقائي (حاليًا %1$s مللي ثانية)</string>
+    <string name="sync_video_late">الصوت/الفيديو: الفيديو متأخر بمقدار %1$s مللي ثانية</string>
+    <string name="sync_audio_late">الصوت/الفيديو: الصوت متأخر بمقدار %1$s مللي ثانية</string>
+    <string name="sync_none">الصوت/الفيديو: بلا ضبط (0 مللي ثانية)</string>
+    <string name="autostart_toast">التشغيل التلقائي عند تشغيل التلفاز: %1$s</string>
+    <string name="on">مفعّل</string>
+    <string name="off">متوقف</string>
+    <string name="qr_hint">امسح رمز QR بكاميرا iPhone\nالعنوان: %1$s   PIN: %2$s\nاسم AirPlay: %3$s</string>
+    <string name="autostart_hint">البدء عند التشغيل: %1$s (اضغط MENU أو OK)</string>
+</resources>
