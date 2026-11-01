@@ -104,6 +104,15 @@ Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>`
 
 Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
 
+## Web kumandası (yeni arayüz)
+
+Web sayfası (`http://<cihaz-ip>:8080`) bir medya sunucusu kumandası gibi çalışır: altta **Kumanda · Gönder · Ayarlar** sekmeleri (Güncelle ve Günlük, Ayarlar'ın altında).
+
+- **Kumanda:** "Şu an oynuyor" kartı (video adı ya da müzikte şarkı/sanatçı, ilerleme çubuğu, geçen/toplam süre), büyük oynat/duraklat, ±10 sn, ses kaydırıcısı ve sessize alma, Sonraki/Durdur, yansıtma sırasında yakınlaştırma düğmeleri ve bekleyen videoların sırası. Durum saniyede bir `GET /api/status` ile yenilenir; ilerleme çubuğunu sürükleyerek ileri/geri sarılır.
+- **Gönder:** Seçilen dosyaların listesi görünür; birden fazla video sırayla yüklenir. Dosya adı TV'ye `X-Name` başlığıyla iletilir ve "Şu an oynuyor" kartında görünür.
+- **Ana ekrana ekle:** Safari'de Paylaş > Ana Ekrana Ekle ile sayfa adres çubuğu olmadan, uygulama gibi açılır (simge ve `manifest.json` sunucudan gelir). Bu tam ekran modunda PIN cihazda hatırlanır; normal tarayıcı sekmesinde yalnızca oturum boyunca tutulur.
+- Açık ve koyu tema telefonun ayarına göre değişir; renkler WCAG AA kontrastını (4,5:1) sağlar.
+
 ## Elle güncelleme (APK gönderme)
 
 İnternet ya da GitHub erişimi olmayan cihazlarda, web arayüzündeki **Uygulamayı güncelle** bölümünden APK gönderilebilir. Sayfa kurulu sürümü de gösterir (ör. `v33`).

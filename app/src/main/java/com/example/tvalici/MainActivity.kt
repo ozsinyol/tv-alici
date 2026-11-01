@@ -307,7 +307,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { text -> runOnUiThread { say(text) } },
                 { file -> acceptApk(file) },
                 approvals,
-                this
+                this,
+                { statusJson }
             ).also { it.start() }
         } catch (e: Exception) {
             appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
@@ -324,6 +325,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
 
         startAirPlayService()
+        mainHandler.post(statusTicker)
         watchNetwork()
         mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
@@ -338,7 +340,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
+    @Volatile
+    private var lastTrack: TrackInfo? = null
+
     override fun audioTrack(info: TrackInfo) {
+        lastTrack = info
         runOnUiThread {
             val text = listOfNotNull(info.title, info.artist, info.album).joinToString("\n")
             trackText.text = text
@@ -441,6 +447,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     override fun audioEnded() {
+        lastTrack = null
         runOnUiThread {
             audioStreaming = false
             abandonAudioFocus()
@@ -765,6 +772,54 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return super.dispatchTouchEvent(ev)
     }
 
+    // ---- /api/status: web kumandasinin "su an oynuyor" bilgisi (saniyede bir, ana is parcacigindan) ----
+
+    @Volatile
+    private var statusJson = """{"state":"idle"}"""
+
+    private val statusTicker = object : Runnable {
+        override fun run() {
+            try {
+                statusJson = buildStatus()
+            } catch (e: Exception) {
+                // bir sonraki turda yeniden denenir
+            }
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun buildStatus(): String {
+        val p = player
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val o = org.json.JSONObject()
+        val playing = p != null && p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED &&
+            (currentUpload != null || airplayVideoActive)
+        when {
+            mirrorActive -> o.put("state", "mirror").put("zoom", mirrorZoom.toDouble())
+            playing && p != null -> {
+                o.put("state", if (p.playbackState == Player.STATE_BUFFERING) "loading" else if (p.isPlaying) "playing" else "paused")
+                o.put("title", currentUpload?.name?.takeIf { it.isNotEmpty() } ?: "AirPlay")
+                o.put("pos", p.currentPosition / 1000.0)
+                o.put("dur", if (p.duration > 0) p.duration / 1000.0 else 0.0)
+            }
+            audioStreaming -> {
+                o.put("state", "audio")
+                lastTrack?.let { t ->
+                    o.put("title", t.title ?: "")
+                    o.put("sub", listOfNotNull(t.artist, t.album).joinToString(" · "))
+                }
+            }
+            else -> o.put("state", "idle")
+        }
+        o.put("vol", audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max)
+        o.put("name", serverName())
+        val q = org.json.JSONArray()
+        uploadQueue.toList().forEach { q.put(it.name.ifEmpty { "video" }) }
+        o.put("queue", q)
+        return o.toString()
+    }
+
     // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
     private val uploadQueue = ArrayDeque<Upload>()
     private var currentUpload: Upload? = null
@@ -806,10 +861,22 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Web sayfasindaki kumanda dugmeleri (her zaman ana is parcacigindan cagrilir). */
-    private fun control(cmd: String) {
+    private fun control(raw: String) {
         val p = player ?: return
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val cmd = raw.substringBefore(':')
+        val arg = if (raw.contains(':')) raw.substringAfter(':') else ""
         when (cmd) {
+            "seek" -> arg.toDoubleOrNull()?.let { sec ->
+                val dur = p.duration
+                val ms = (sec * 1000).toLong().coerceAtLeast(0L)
+                p.seekTo(if (dur > 0) minOf(ms, dur) else ms)
+            }
+            "vol" -> arg.toFloatOrNull()?.let { v ->
+                val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(v.coerceIn(0f, 1f) * max), 0)
+            }
+            "mute" -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0)
             "playpause" -> if (p.isPlaying) p.pause() else p.play()
             "back10" -> p.seekTo(maxOf(0L, p.currentPosition - 10_000L))
             "fwd10" -> {
