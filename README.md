@@ -30,9 +30,13 @@ APK, yalnızca GitHub Secrets'ta duran özel bir anahtarla imzalanır (`KEYSTORE
 
 ## Ekran yansıtma (AirPlay) ve lisans
 
-Android cihaz, ağda "TV Alici" adıyla bir AirPlay sunucusu olarak görünür; iPhone'un Denetim Merkezi'nden **Ekran Yansıtma** ile bağlanılır. Görüntü (H.264) ve ses (AAC-ELD) desteklenir. ALAC (Müzik uygulamasından AirPlay) desteklenmez. Ses ile görüntü arasındaki kayma elle ayarlanır (aşağıya bakın).
+Android cihaz, ağda "TV Alici" adıyla bir AirPlay sunucusu olarak görünür; iPhone'un Denetim Merkezi'nden **Ekran Yansıtma** ile bağlanılır. Görüntü (H.264) ve ses (AAC-ELD) desteklenir. Yalnızca ses (Müzik, Spotify vb.) için bkz. [Ses AirPlay](#ses-airplay-müzik-vb). Ses ile görüntü arasındaki kayma elle ayarlanır (aşağıya bakın).
 
 Bu özellik, FairPlay yayın anahtarını çözmek için [UxPlay](https://github.com/FDH2/UxPlay) projesindeki `playfair` kodunu (`app/src/main/cpp/playfair`, GNU GPL v3) ve aynı projenin `fairplay_playfair.c` dosyasındaki yanıt tablolarını (LGPL 2.1+, `AirPlayFairPlay.kt`) kullanır. Bu nedenle **bu depo GNU GPL v3 ile lisanslıdır** (bkz. `LICENSE`).
+
+## Ses AirPlay (Müzik vb.)
+
+iPhone'da Müzik, Spotify, Podcasts gibi uygulamalarda AirPlay simgesinden "TV Alici"yı seçince yalnızca ses TV'ye gelir (ALAC, 44100 Hz, 16 bit, stereo). Ses, `app/src/main/cpp/alac` altındaki Apple'ın açık kaynak ALAC çözücüsüyle (Apache 2.0) çözülür ve yaklaşık 600 ms'lik bir tamponla çalınır; müzikte gecikme önemli olmadığı için Wi-Fi titremesi bu tamponla gizlenir. iPhone'dan ses seviyesi, duraklatma ve sarma (FLUSH) komutları desteklenir. Ekranda şarkı bilgisi ya da kapak resmi gösterilmez; kayıp paket yeniden istenmez (çok zayıf Wi-Fi'de ara sıra çıtırtı olabilir).
 
 ## Ses/görüntü senkronu
 

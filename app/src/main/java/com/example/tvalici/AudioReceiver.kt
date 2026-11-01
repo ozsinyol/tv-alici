@@ -9,6 +9,8 @@ import android.os.Build
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.nio.ByteBuffer
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -19,7 +21,8 @@ import kotlin.concurrent.thread
  *  - UDP, 12 baytlik RTP basligi + yuk
  *  - yukun tam 16 baytlik bloklari AES-128-CBC ile sifreli (her paketin IV'si ayni, eiv),
  *    kalan kuyruk bayt sifresiz
- *  - ct=8: AAC-ELD 44100 Hz stereo (yansitma), ct=4: AAC-LC, ct=2: ALAC (desteklenmiyor)
+ *  - ct=8: AAC-ELD 44100 Hz stereo (yansitma), ct=4: AAC-LC, ct=2: ALAC (Muzik vb. yalnizca ses;
+ *    AlacDecoder ile cozulur, cikis tamponu ve on tamponlama daha buyuktur)
  * Ses MediaCodec ile cozulup AudioTrack ile calinir. Kayip paket istegi (resend) yok. Goruntu ile
  * senkron SyncSettings'teki elle ayarlanan kaydirma ile yapilir (TV'de SAG/SOL tuslari).
  */
@@ -44,9 +47,11 @@ class AudioReceiver(
 
     @Volatile
     private var gain = 1.0f
+    @Volatile
     private var lastSeq = -1
     private var packets = 0
     private var lostPackets = 0 // sira numarasi atlayan (gelmeyen) paketler
+    private var alacErrors = 0
     private var latePackets = 0 // tekrar ya da gec gelen paketler
     private var ptsUs = 0L
 
@@ -59,8 +64,18 @@ class AudioReceiver(
     private var appliedDelayMs = 0
     private var skipBytes = 0
 
+    // ALAC (yalnizca ses) yolu: cozulen PCM bir kuyruga konur, ayri bir is parcacigi AudioTrack'e yazar.
+    @Volatile
+    private var alac: AlacDecoder? = null
+    private val alacPcm = ByteArray(AlacDecoder.MAX_PCM_BYTES)
+    private val pcmQueue = LinkedBlockingQueue<ByteArray>(512) // yaklasik 4 sn
+
+    @Volatile
+    private var flushRequested = false
+
     /** Ses akisini baslatir. Codec desteklenmiyorsa false doner (ses yok sayilir). */
     fun start(): Boolean {
+        if (ct == 2) return startAlac()
         val config: Pair<ByteArray, Int> = when (ct) {
             // AudioSpecificConfig: ELD (tur 39), 44100 Hz, stereo
             8 -> byteArrayOf(0xF8.toByte(), 0xE8.toByte(), 0x50, 0x00) to 39
@@ -89,6 +104,87 @@ class AudioReceiver(
         thread(name = "audio-ctrl", isDaemon = true) { drainControl() }
         log("Ses hazır (ct=$ct)")
         return true
+    }
+
+    private fun startAlac(): Boolean {
+        val d = AlacDecoder.create()
+        if (d == null) {
+            log("ALAC çözücüsü yüklenemedi, ses yok sayılıyor")
+            return false
+        }
+        alac = d
+        if (!createAlacTrack()) {
+            releaseAll()
+            return false
+        }
+        thread(name = "audio-recv", isDaemon = true) { receiveLoop() }
+        thread(name = "audio-ctrl", isDaemon = true) { drainControl() }
+        thread(name = "audio-alac-out", isDaemon = true) { alacWriteLoop() }
+        log("Ses hazır (ALAC, yalnızca ses)")
+        return true
+    }
+
+    /** Muzik icin genis tampon (~600 ms): gecikme onemli degil, Wi-Fi titremesi gizlenir. */
+    private fun createAlacTrack(): Boolean {
+        return try {
+            outRate = 44100
+            outChannels = 2
+            val mask = AudioFormat.CHANNEL_OUT_STEREO
+            val minBuf = AudioTrack.getMinBufferSize(44100, mask, AudioFormat.ENCODING_PCM_16BIT)
+            val bufBytes = maxOf(minBuf * 2, ALAC_BUFFER_BYTES)
+            val t = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(44100)
+                        .setChannelMask(mask)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufBytes)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+            t.setVolume(gain)
+            // play() on tamponlama dolunca cagrilir (alacWriteLoop).
+            track = t
+            log("Ses çıkışı (ALAC): 44100 Hz, 2 kanal, tampon ${bufBytes / 4 * 1000 / 44100} ms")
+            true
+        } catch (e: Exception) {
+            log("AudioTrack kurulamadı: ${e.javaClass.simpleName} ${e.message}")
+            false
+        }
+    }
+
+    /** Kuyruktaki PCM'i AudioTrack'e yazar; yeterli veri birikince calmaya baslar. */
+    private fun alacWriteLoop() {
+        var written = 0
+        var prebuffering = true
+        while (running) {
+            try {
+                val pcm = pcmQueue.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                val t = track ?: break
+                if (flushRequested) {
+                    flushRequested = false
+                    prebuffering = true
+                    written = 0
+                }
+                t.write(pcm, 0, pcm.size)
+                if (prebuffering) {
+                    written += pcm.size
+                    if (written >= ALAC_PREBUFFER_BYTES) {
+                        t.play()
+                        prebuffering = false
+                    }
+                }
+            } catch (e: Exception) {
+                break // AudioTrack kapatildi
+            }
+        }
     }
 
     private fun receiveLoop() {
@@ -156,6 +252,21 @@ class AudioReceiver(
     }
 
     private fun feed(frame: ByteArray, size: Int) {
+        val a = alac
+        if (a != null) {
+            val n = a.decode(frame, size, alacPcm)
+            if (n <= 0) {
+                alacErrors++
+                if (alacErrors == 1 || alacErrors % 200 == 0) log("ALAC kare çözülemedi ($alacErrors)")
+                return
+            }
+            val pcm = alacPcm.copyOf(n)
+            if (!pcmQueue.offer(pcm)) {
+                pcmQueue.poll() // yazici yetisemiyor: en eski kareyi at
+                pcmQueue.offer(pcm)
+            }
+            return
+        }
         val c = codec ?: return
         try {
             val idx = c.dequeueInputBuffer(5_000)
@@ -279,6 +390,18 @@ class AudioReceiver(
 
     /** Arabellegi bosaltir (FLUSH istegi). */
     fun flush() {
+        lastSeq = -1 // FLUSH'tan sonra sira numarasi yeniden baslayabilir
+        if (alac != null) {
+            flushRequested = true
+            pcmQueue.clear()
+            try {
+                track?.pause()
+                track?.flush()
+            } catch (e: Exception) {
+                // onemsiz
+            }
+            return
+        }
         try {
             track?.pause()
             track?.flush()
@@ -298,6 +421,10 @@ class AudioReceiver(
     private fun releaseAll() {
         runCatching { data.close() }
         runCatching { control.close() }
+        pcmQueue.clear()
+        val a = alac
+        alac = null
+        a?.release()
         val c = codec
         codec = null
         if (c != null) {
@@ -310,5 +437,10 @@ class AudioReceiver(
             runCatching { t.stop() }
             runCatching { t.release() }
         }
+    }
+
+    private companion object {
+        const val ALAC_BUFFER_BYTES = 44100 * 4 * 600 / 1000 // 600 ms
+        const val ALAC_PREBUFFER_BYTES = 44100 * 4 * 300 / 1000 // 300 ms
     }
 }
