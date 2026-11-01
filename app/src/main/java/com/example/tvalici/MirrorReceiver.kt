@@ -95,6 +95,7 @@ class MirrorReceiver(
         val input = DataInputStream(BufferedInputStream(socket.getInputStream(), 1 shl 16))
         val header = ByteArray(128)
         var frames = 0
+        MirrorStats.reset()
         var packets = 0
         // Olcum: ardisik kareler arasindaki varis suresi (ag titremesi).
         var lastArrivalNs = 0L
@@ -194,6 +195,7 @@ class MirrorReceiver(
                         val targetNs = if (bufferNs > 0) now - j + bufferNs else 0L
                         decoder.feed(payload, size, kind == FRAME_IDR, targetNs)
                         frames++
+                        MirrorStats.frames = frames.toLong()
                         if (frames == 1) log("İlk kare çözücüye verildi")
                         if (frames % 300 == 0) {
                             val avg = if (gapCount > 0) gapSumNs / gapCount / 1000 else 0L

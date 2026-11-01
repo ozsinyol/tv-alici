@@ -30,6 +30,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -82,6 +83,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             logWifi()
             runOnUiThread {
                 syncStreamLocks()
+                updateNowPlaying()
                 player?.stop()
                 airplayVideoActive = false
                 photoView.visibility = android.view.View.GONE
@@ -102,6 +104,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             panY = 0f
             runOnUiThread {
                 syncStreamLocks()
+                updateNowPlaying()
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
         }
@@ -133,6 +136,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
     private val hideSay = Runnable { sayView.visibility = android.view.View.GONE }
     private lateinit var trackArt: ImageView
+    private lateinit var clockTime: TextView
+    private lateinit var clockDate: TextView
+    private lateinit var connLabel: TextView
+    private var clockOn = true
+    private var mirrorFill = false
+    private var statsOn = false
+    private var connectedName: String? = null
+    private var connectedIp = ""
+    private var connectedCount = 0
     private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
     private var airplayInfoRef: AirPlayInfo? = null
@@ -164,6 +176,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        clockOn = getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("clock", true)
+        mirrorFill = getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("mirrorFill", false)
         SyncSettings.offsetMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
             .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
         SyncSettings.jitterBufferMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
@@ -230,6 +244,25 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        clockTime = TextView(this).apply {
+            textSize = 56f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        clockDate = TextView(this).apply {
+            textSize = 20f
+            setTextColor(Color.rgb(181, 181, 189))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(16))
+        }
+        connLabel = TextView(this).apply {
+            textSize = 18f
+            setTextColor(Color.rgb(52, 199, 89))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+            visibility = android.view.View.GONE
+        }
         trackArt = ImageView(this).apply { visibility = android.view.View.GONE }
         trackText = TextView(this).apply {
             textSize = 22f
@@ -244,8 +277,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         overlayContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            addView(clockTime, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(clockDate, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(connLabel, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(trackArt, LinearLayout.LayoutParams(260, 260).apply { topMargin = 24 })
             addView(trackText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
@@ -287,7 +323,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             )
             addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(nowPlayingView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(
+                statsView,
+                FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                    setMargins(dp(12), dp(12), dp(12), dp(12))
+                }
+            )
+            addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
         // Ekran doner ya da yerlesim degisirse (configChanges oldugu icin Activity yeniden olusmaz) yansitmayi yeniden sigdir.
@@ -305,9 +349,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { upload -> runOnUiThread { play(upload) } },
                 { cmd -> runOnUiThread { control(cmd) } },
                 { text -> runOnUiThread { say(text) } },
+                { url -> runOnUiThread { playUrl(url) } },
                 { file -> acceptApk(file) },
                 approvals,
-                this
+                this,
+                { statusJson }
             ).also { it.start() }
         } catch (e: Exception) {
             appendLog("Web sunucusu başlamadı (port $port): ${e.message}")
@@ -324,6 +370,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
 
         startAirPlayService()
+        mainHandler.post(statusTicker)
         watchNetwork()
         mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
@@ -332,14 +379,32 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
 
-    override fun deviceConnected(name: String?) {
+    override fun deviceConnected(name: String?, ip: String) {
         runOnUiThread {
-            Toast.makeText(this, "👋 " + (name ?: "iPhone"), Toast.LENGTH_LONG).show()
+            connectedCount++
+            connectedName = name ?: "iPhone"
+            connectedIp = ip
+            updateConnLabel()
+            Toast.makeText(this, "👋 " + connectedName, Toast.LENGTH_LONG).show()
         }
     }
 
-    override fun audioTrack(info: TrackInfo) {
+    override fun deviceDisconnected() {
         runOnUiThread {
+            connectedCount = maxOf(0, connectedCount - 1)
+            if (connectedCount == 0) connectedName = null
+            updateConnLabel()
+        }
+    }
+
+    @Volatile
+    private var lastTrack: TrackInfo? = null
+
+    override fun audioTrack(info: TrackInfo) {
+        lastTrack = info
+        runOnUiThread {
+            npDismissed = false
+            updateNowPlaying()
             val text = listOfNotNull(info.title, info.artist, info.album).joinToString("\n")
             trackText.text = text
             trackText.visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
@@ -349,6 +414,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun audioArt(image: ByteArray?) {
         val bmp = image?.let { decodeScaled(it) }
         runOnUiThread {
+            lastArt = bmp
+            updateNowPlaying()
             if (bmp == null) {
                 trackArt.setImageDrawable(null)
                 trackArt.visibility = android.view.View.GONE
@@ -371,6 +438,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             audioStreaming = true
             requestAudioFocus()
             syncStreamLocks()
+            updateNowPlaying()
         }
     }
 
@@ -441,10 +509,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     override fun audioEnded() {
+        lastTrack = null
         runOnUiThread {
             audioStreaming = false
+            lastArt = null
+            npDismissed = false
             abandonAudioFocus()
             syncStreamLocks()
+            updateNowPlaying()
             trackText.text = ""
             trackText.visibility = android.view.View.GONE
             trackArt.setImageDrawable(null)
@@ -580,7 +652,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val cw = rootLayout.width
         val ch = rootLayout.height
         if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
-        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH) * mirrorZoom
+        val fit = if (mirrorFill) maxOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
+        else minOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
+        val scale = fit * mirrorZoom
         val w = (videoW * scale).toInt().coerceAtLeast(1)
         val h = (videoH * scale).toInt().coerceAtLeast(1)
         val maxPanX = maxOf(0f, (w - cw) / 2f)
@@ -679,6 +753,303 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    // ---- TV menusu: MENU tusu ya da QR/yansitma ekraninda OK ile acilir (Mi TV Stick'te MENU tusu yok) ----
+
+    private class MenuItem(
+        val label: Int,
+        val value: () -> String,
+        val left: () -> Unit,
+        val right: () -> Unit,
+        val ok: () -> Unit = right,
+        val text: String? = null
+    )
+
+    private var menuOpen = false
+    private var menuTrusted = false // true: "Guvenilen cihazlar" alt menusu
+    private var menuIndex = 0
+    private val menuHide = Runnable { closeMenu() }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private val menuBox: LinearLayout by lazy {
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(28, 28, 30))
+            setPadding(dp(24), dp(20), dp(24), dp(16))
+            isClickable = true // kutunun ici arkadaki "disari tikla = kapat" katmanina gitmesin
+        }
+    }
+    // Kucuk ekranlarda (yatay telefon) satirlar sigmazsa menu kaydirilir; secili satir gorunur tutulur.
+    private val menuScroll: ScrollView by lazy {
+        ScrollView(this).apply {
+            isFillViewport = false
+            isVerticalScrollBarEnabled = false
+            addView(menuBox, android.view.ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+    }
+    private val menuLayer: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            visibility = android.view.View.GONE
+            isClickable = true
+            setOnClickListener { closeMenu() }
+            addView(
+                menuScroll,
+                FrameLayout.LayoutParams(minOf(dp(560), resources.displayMetrics.widthPixels - dp(32)), WRAP_CONTENT, Gravity.CENTER)
+            )
+        }
+    }
+
+    private fun setSyncOffset(v: Int) {
+        val c = v.coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
+        SyncSettings.offsetMs = c
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("syncOffsetMs", c).apply()
+    }
+
+    private fun setBuffer(v: Int) {
+        val c = v.coerceIn(0, SyncSettings.MAX_JITTER_MS)
+        SyncSettings.jitterBufferMs = c
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", c).apply()
+    }
+
+    private fun setBufferAuto() {
+        SyncSettings.jitterBufferMs = SyncSettings.AUTO
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
+    }
+
+    private fun bufferText(): String = when {
+        SyncSettings.jitterBufferMs == SyncSettings.AUTO -> getString(R.string.buffer_auto, SyncSettings.autoJitterMs.toString())
+        SyncSettings.jitterBufferMs == 0 -> getString(R.string.buffer_off)
+        else -> "${SyncSettings.jitterBufferMs} ms"
+    }
+
+    // Uyku zamanlayicisi: secilen sure sonunda oynatma/yansitma durdurulur (yalnizca bu oturumda gecerli).
+    private val sleepOptions = intArrayOf(0, 15, 30, 60, 90, 120)
+    private var sleepIndex = 0
+    private var sleepDeadline = 0L
+    private val sleepRunnable = Runnable {
+        sleepIndex = 0
+        sleepDeadline = 0L
+        appendLog("Uyku zamanlayıcısı doldu, oynatma durduruldu")
+        stopPlayback()
+        Toast.makeText(this, getString(R.string.sleep_stopped), Toast.LENGTH_LONG).show()
+    }
+
+    private fun setSleep(index: Int) {
+        sleepIndex = ((index % sleepOptions.size) + sleepOptions.size) % sleepOptions.size
+        mainHandler.removeCallbacks(sleepRunnable)
+        val min = sleepOptions[sleepIndex]
+        if (min > 0) {
+            sleepDeadline = SystemClock.elapsedRealtime() + min * 60_000L
+            mainHandler.postDelayed(sleepRunnable, min * 60_000L)
+        } else {
+            sleepDeadline = 0L
+        }
+    }
+
+    private fun sleepText(): String =
+        if (sleepDeadline == 0L) getString(R.string.buffer_off)
+        else getString(R.string.sleep_min, ((sleepDeadline - SystemClock.elapsedRealtime() + 59_999L) / 60_000L).toString())
+
+    private fun onOff(b: Boolean): String = getString(if (b) R.string.on else R.string.off)
+
+    private fun toggleFill() {
+        mirrorFill = !mirrorFill
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("mirrorFill", mirrorFill).apply()
+        if (lastMirrorW > 0 && lastMirrorH > 0) fitMirror(lastMirrorW, lastMirrorH)
+    }
+
+    private fun toggleClock() {
+        clockOn = !clockOn
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("clock", clockOn).apply()
+        updateClock()
+    }
+
+    private fun menuBack() {
+        if (menuTrusted) {
+            menuTrusted = false
+            menuIndex = 0
+            renderMenu()
+        } else {
+            closeMenu()
+        }
+    }
+
+    /** "Guvenilen cihazlar" alt menusu: OK ile secili cihazin guveni kaldirilir. */
+    private fun trustedItems(): List<MenuItem> {
+        val list = mutableListOf<MenuItem>()
+        val devices = approvals.trustedList()
+        if (devices.isEmpty()) list += MenuItem(R.string.menu_none, { "" }, {}, {}, {})
+        devices.forEach { line ->
+            val ip = line.substringBefore(' ')
+            list += MenuItem(
+                R.string.menu_forget,
+                { getString(R.string.menu_forget) },
+                {}, {},
+                { approvals.forget(ip) },
+                text = ip + if (line.contains("(perm)")) " ★" else ""
+            )
+        }
+        if (devices.size > 1) list += MenuItem(R.string.menu_forget_all, { "" }, {}, {}, { approvals.forgetAll() })
+        list += MenuItem(R.string.menu_back, { "" }, {}, {}, { menuBack() })
+        return list
+    }
+
+    private fun menuItems(): List<MenuItem> {
+        if (menuTrusted) return trustedItems()
+        val step = SyncSettings.STEP_MS
+        val list = mutableListOf<MenuItem>()
+        list += MenuItem(
+            R.string.menu_autostart,
+            { getString(if (autostartOn()) R.string.on else R.string.off) },
+            { toggleAutostart() }, { toggleAutostart() }
+        )
+        list += MenuItem(
+            R.string.menu_sleep,
+            { sleepText() },
+            { setSleep(sleepIndex - 1) }, { setSleep(sleepIndex + 1) },
+            { setSleep(0) }
+        )
+        list += MenuItem(
+            R.string.menu_sync,
+            { (if (SyncSettings.offsetMs > 0) "+" else "") + SyncSettings.offsetMs + " ms" },
+            { setSyncOffset(SyncSettings.offsetMs - step) }, { setSyncOffset(SyncSettings.offsetMs + step) },
+            { setSyncOffset(0) }
+        )
+        list += MenuItem(
+            R.string.menu_buffer,
+            { bufferText() },
+            { setBuffer(SyncSettings.effectiveJitterMs - step) }, { setBuffer(SyncSettings.effectiveJitterMs + step) },
+            { setBufferAuto() }
+        )
+        if (mirrorActive && lastMirrorW > 0) {
+            list += MenuItem(
+                R.string.menu_zoom,
+                { "%.2f×".format(java.util.Locale.US, mirrorZoom.toDouble()) },
+                { setMirrorZoom(mirrorZoom / 1.25f) }, { setMirrorZoom(mirrorZoom * 1.25f) },
+                { setMirrorZoom(1f) }
+            )
+        }
+        list += MenuItem(
+            R.string.menu_fit,
+            { getString(if (mirrorFill) R.string.fit_fill else R.string.fit_contain) },
+            { toggleFill() }, { toggleFill() }
+        )
+        list += MenuItem(R.string.menu_clock, { onOff(clockOn) }, { toggleClock() }, { toggleClock() })
+        list += MenuItem(
+            R.string.menu_stats,
+            { onOff(statsOn) },
+            { statsOn = !statsOn; updateStats() }, { statsOn = !statsOn; updateStats() }
+        )
+        list += MenuItem(
+            R.string.menu_trusted,
+            { "›" },
+            {}, { menuTrusted = true; menuIndex = 0 }
+        )
+        list += MenuItem(
+            R.string.menu_update,
+            { "v${BuildConfig.VERSION_CODE}" },
+            { updater.check(manual = true) }, { updater.check(manual = true) }
+        )
+        list += MenuItem(R.string.menu_exit, { "" }, {}, {}, { finish() })
+        list += MenuItem(R.string.menu_close, { "" }, {}, {}, { closeMenu() })
+        return list
+    }
+
+    private fun renderMenu() {
+        val items = menuItems()
+        menuIndex = menuIndex.coerceIn(0, items.size - 1)
+        menuBox.removeAllViews()
+        menuBox.addView(TextView(this).apply {
+            text = getString(R.string.menu_title)
+            textSize = 26f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, dp(12))
+        })
+        items.forEachIndexed { i, item ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                setBackgroundColor(if (i == menuIndex) Color.rgb(0, 102, 214) else Color.TRANSPARENT)
+                isClickable = true
+                // Dokunma: secili satirin "tamam" eylemi; uzun basma: azalt.
+                setOnClickListener {
+                    menuIndex = i
+                    item.ok()
+                    scheduleMenuClose()
+                    if (menuOpen) renderMenu()
+                }
+                setOnLongClickListener {
+                    menuIndex = i
+                    item.left()
+                    scheduleMenuClose()
+                    if (menuOpen) renderMenu()
+                    true
+                }
+            }
+            row.addView(TextView(this).apply {
+                text = item.text ?: getString(item.label)
+                textSize = 20f
+                setTextColor(Color.WHITE)
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            row.addView(TextView(this).apply {
+                text = item.value()
+                textSize = 20f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.END
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            menuBox.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            if (i == menuIndex) menuScroll.post { menuScroll.scrollTo(0, maxOf(0, row.top - dp(80))) }
+        }
+        menuBox.addView(TextView(this).apply {
+            text = getString(R.string.menu_hint)
+            textSize = 14f
+            setTextColor(Color.rgb(181, 181, 189))
+            setPadding(0, dp(12), 0, 0)
+        })
+    }
+
+    private fun scheduleMenuClose() {
+        mainHandler.removeCallbacks(menuHide)
+        mainHandler.postDelayed(menuHide, 30_000L)
+    }
+
+    private fun openMenu() {
+        if (menuOpen) return
+        menuOpen = true
+        menuTrusted = false
+        menuIndex = 0
+        renderMenu()
+        menuLayer.visibility = android.view.View.VISIBLE
+        scheduleMenuClose()
+    }
+
+    private fun closeMenu() {
+        menuOpen = false
+        menuTrusted = false
+        mainHandler.removeCallbacks(menuHide)
+        menuLayer.visibility = android.view.View.GONE
+    }
+
+    /** Menu aciksa tuslari menu yonetir; ilgilenmedigi tuslar (ses vb.) sisteme birakilir (false). */
+    private fun menuKey(keyCode: Int, event: KeyEvent): Boolean {
+        val items = menuItems()
+        scheduleMenuClose()
+        when {
+            keyCode == KeyEvent.KEYCODE_DPAD_UP -> menuIndex = (menuIndex - 1 + items.size) % items.size
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> menuIndex = (menuIndex + 1) % items.size
+            keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> items[menuIndex.coerceIn(0, items.size - 1)].left()
+            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> items[menuIndex.coerceIn(0, items.size - 1)].right()
+            isOkKey(keyCode) -> if (event.repeatCount == 0) items[menuIndex.coerceIn(0, items.size - 1)].ok()
+            keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_MENU -> if (event.repeatCount == 0) menuBack()
+            else -> return false
+        }
+        if (menuOpen) renderMenu()
+        return true
+    }
+
     /** Web sayfasindan gelen mesaji ekranda 20 sn buyuk yazi olarak gosterir (bos metin kaldirir). */
     private fun say(text: String) {
         mainHandler.removeCallbacks(hideSay)
@@ -765,8 +1136,216 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return super.dispatchTouchEvent(ev)
     }
 
+    // ---- "Simdi caliyor": muzikte tam ekran kapak + sarki bilgisi (Geri tusu QR ekranina doner) ----
+
+    private var npDismissed = false
+    private var lastArt: Bitmap? = null
+    private val npBackdrop: ImageView by lazy { ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_XY; alpha = 0.55f } }
+    private val npArt: ImageView by lazy { ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP } }
+    private val npTitle: TextView by lazy {
+        TextView(this).apply {
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            maxLines = 2
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(24), dp(24), dp(24), 0)
+        }
+    }
+    private val npArtist: TextView by lazy {
+        TextView(this).apply {
+            textSize = 24f
+            setTextColor(Color.rgb(209, 209, 214))
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(24), dp(6), dp(24), 0)
+        }
+    }
+    private val npAlbum: TextView by lazy {
+        TextView(this).apply {
+            textSize = 18f
+            setTextColor(Color.rgb(181, 181, 189))
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(24), dp(4), dp(24), 0)
+        }
+    }
+    private val nowPlayingView: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            visibility = android.view.View.GONE
+            addView(npBackdrop, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(
+                LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    addView(npArt, LinearLayout.LayoutParams(dp(240), dp(240)))
+                    addView(npTitle, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                    addView(npArtist, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                    addView(npAlbum, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                },
+                FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            )
+        }
+    }
+
+    private fun updateNowPlaying() {
+        val t = lastTrack
+        val art = lastArt
+        val show = audioStreaming && !mirrorActive && !airplayVideoActive && !npDismissed && (t != null || art != null)
+        if (!show) {
+            nowPlayingView.visibility = android.view.View.GONE
+            return
+        }
+        npTitle.text = t?.title ?: ""
+        npArtist.text = t?.artist ?: ""
+        npAlbum.text = t?.album ?: ""
+        if (art != null) {
+            val side = (minOf(rootLayout.width, rootLayout.height) * 0.5f).toInt().coerceAtLeast(dp(120))
+            npArt.layoutParams = LinearLayout.LayoutParams(side, side)
+            npArt.setImageBitmap(art)
+            npArt.visibility = android.view.View.VISIBLE
+            // Kucuk bir kopyayi buyutmek, ucuz bir bulaniklastirma (arka plan) verir.
+            npBackdrop.setImageBitmap(Bitmap.createScaledBitmap(art, 16, 16, true))
+        } else {
+            npArt.visibility = android.view.View.GONE
+            npBackdrop.setImageDrawable(null)
+        }
+        nowPlayingView.visibility = android.view.View.VISIBLE
+    }
+
+    // ---- /api/status: web kumandasinin "su an oynuyor" bilgisi (saniyede bir, ana is parcacigindan) ----
+
+    @Volatile
+    private var statusJson = """{"state":"idle"}"""
+
+    private val statusTicker = object : Runnable {
+        override fun run() {
+            try {
+                statusJson = buildStatus()
+                updateClock()
+                updateStats()
+            } catch (e: Exception) {
+                // bir sonraki turda yeniden denenir
+            }
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun updateClock() {
+        val vis = if (clockOn) android.view.View.VISIBLE else android.view.View.GONE
+        clockTime.visibility = vis
+        clockDate.visibility = vis
+        if (!clockOn) return
+        val now = java.util.Date()
+        clockTime.text = android.text.format.DateFormat.getTimeFormat(this).format(now)
+        clockDate.text = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
+    }
+
+    private val statsView: TextView by lazy {
+        TextView(this).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            visibility = android.view.View.GONE
+        }
+    }
+    private var lastStatsFrames = 0L
+    private var lastStatsAt = 0L
+
+    private fun wifiSummary(): String = try {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+        @Suppress("DEPRECATION")
+        val i = wm?.connectionInfo
+        if (i == null || i.rssi <= -127) "-" else {
+            val f = i.frequency
+            val band = when {
+                f >= 5925 -> "6 GHz"
+                f >= 4900 -> "5 GHz"
+                f > 0 -> "2.4 GHz"
+                else -> "?"
+            }
+            "$band ${i.rssi} dBm ${i.linkSpeed} Mbps"
+        }
+    } catch (e: Exception) {
+        "-"
+    }
+
+    /** Menudeki "Istatistikler" acikken sag ustte teknik bilgi paneli (saniyede bir). Tanilama metni dilden bagimsizdir. */
+    private fun updateStats() {
+        if (!statsOn) {
+            statsView.visibility = android.view.View.GONE
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val fps = if (lastStatsAt > 0 && now > lastStatsAt) (MirrorStats.frames - lastStatsFrames) * 1000.0 / (now - lastStatsAt) else 0.0
+        lastStatsFrames = MirrorStats.frames
+        lastStatsAt = now
+        val sb = StringBuilder()
+        if (mirrorActive && lastMirrorW > 0) {
+            sb.append("Mirror   ${lastMirrorW}x$lastMirrorH @ ${"%.0f".format(java.util.Locale.US, maxOf(0.0, fps))} fps\n")
+        } else {
+            sb.append("Mirror   -\n")
+        }
+        sb.append("Buffer   ").append(
+            if (SyncSettings.jitterBufferMs == SyncSettings.AUTO) "auto ${SyncSettings.autoJitterMs} ms" else "${SyncSettings.jitterBufferMs} ms"
+        ).append('\n')
+        sb.append("Dropped  ${MirrorStats.dropped}\n")
+        sb.append("A/V sync ${SyncSettings.offsetMs} ms\n")
+        sb.append("Wi-Fi    ${wifiSummary()}")
+        connectedName?.let { sb.append("\nDevice   ").append(it).append(if (connectedIp.isNotEmpty()) " ($connectedIp)" else "") }
+        statsView.text = sb.toString()
+        statsView.visibility = android.view.View.VISIBLE
+    }
+
+    private fun updateConnLabel() {
+        val n = connectedName
+        if (n == null || connectedCount <= 0) {
+            connLabel.visibility = android.view.View.GONE
+        } else {
+            connLabel.text = "● $n" + (if (connectedIp.isNotEmpty()) " · $connectedIp" else "")
+            connLabel.visibility = android.view.View.VISIBLE
+        }
+    }
+
+    private fun buildStatus(): String {
+        val p = player
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val o = org.json.JSONObject()
+        val playing = p != null && p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED &&
+            (currentUpload != null || airplayVideoActive || playingUrl != null)
+        when {
+            mirrorActive -> o.put("state", "mirror").put("zoom", mirrorZoom.toDouble())
+            playing && p != null -> {
+                o.put("state", if (p.playbackState == Player.STATE_BUFFERING) "loading" else if (p.isPlaying) "playing" else "paused")
+                o.put("title", currentUpload?.name?.takeIf { it.isNotEmpty() } ?: playingUrl ?: "AirPlay")
+                o.put("pos", p.currentPosition / 1000.0)
+                o.put("dur", if (p.duration > 0) p.duration / 1000.0 else 0.0)
+            }
+            audioStreaming -> {
+                o.put("state", "audio")
+                lastTrack?.let { t ->
+                    o.put("title", t.title ?: "")
+                    o.put("sub", listOfNotNull(t.artist, t.album).joinToString(" · "))
+                }
+            }
+            else -> o.put("state", "idle")
+        }
+        o.put("vol", audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max)
+        o.put("name", serverName())
+        connectedName?.let { o.put("device", it) }
+        val q = org.json.JSONArray()
+        uploadQueue.toList().forEach { q.put(it.name.ifEmpty { "video" }) }
+        o.put("queue", q)
+        return o.toString()
+    }
+
     // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
     private val uploadQueue = ArrayDeque<Upload>()
+    private var playingUrl: String? = null // /api/play ile acilan adres (durum kartinda gosterilir)
     private var currentUpload: Upload? = null
 
     private fun play(upload: Upload) {
@@ -792,7 +1371,28 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return true
     }
 
+    /** Web sayfasindan/yer iminden gelen http(s) video adresini ExoPlayer ile oynatir (MP4, HLS ...). */
+    private fun playUrl(url: String) {
+        val uri = Uri.parse(url)
+        if (uri.scheme != "http" && uri.scheme != "https") return
+        uploadQueue.clear()
+        currentUpload = null
+        playingUrl = (uri.host ?: "") + (uri.lastPathSegment?.let { "/$it" } ?: "")
+        overlayView.visibility = android.view.View.GONE
+        photoView.visibility = android.view.View.GONE
+        val item = MediaItem.Builder().setUri(uri).apply {
+            if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+        }.build()
+        player?.apply {
+            setMediaItem(item)
+            prepare()
+            playWhenReady = true
+        }
+        appendLog("Bağlantıdan oynatılıyor: $playingUrl")
+    }
+
     private fun start(upload: Upload) {
+        playingUrl = null
         currentUpload = upload
         overlayView.visibility = android.view.View.GONE
         val factory = DataSource.Factory { GrowingFileDataSource(upload) }
@@ -806,10 +1406,22 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Web sayfasindaki kumanda dugmeleri (her zaman ana is parcacigindan cagrilir). */
-    private fun control(cmd: String) {
+    private fun control(raw: String) {
         val p = player ?: return
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val cmd = raw.substringBefore(':')
+        val arg = if (raw.contains(':')) raw.substringAfter(':') else ""
         when (cmd) {
+            "seek" -> arg.toDoubleOrNull()?.let { sec ->
+                val dur = p.duration
+                val ms = (sec * 1000).toLong().coerceAtLeast(0L)
+                p.seekTo(if (dur > 0) minOf(ms, dur) else ms)
+            }
+            "vol" -> arg.toFloatOrNull()?.let { v ->
+                val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(v.coerceIn(0f, 1f) * max), 0)
+            }
+            "mute" -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0)
             "playpause" -> if (p.isPlaying) p.pause() else p.play()
             "back10" -> p.seekTo(maxOf(0L, p.currentPosition - 10_000L))
             "fwd10" -> {
@@ -875,6 +1487,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         // Ziplayan QR'i durduran OK tusu ayri bir islem (otomatik baslatma degisimi) tetiklemesin.
         if (wasBouncing && isOkKey(keyCode)) return true
         if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
+        if (menuOpen) return menuKey(keyCode, event) || super.onKeyDown(keyCode, event)
+        // MENU her zaman menuyu acar; OK da (MENU tusu olmayan kumandalar icin) QR ya da yansitma ekraninda acar.
+        if (keyCode == KeyEvent.KEYCODE_MENU ||
+            (isOkKey(keyCode) && (mirrorActive || overlayView.visibility == android.view.View.VISIBLE))
+        ) {
+            if (event.repeatCount == 0) openMenu()
+            return true
+        }
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
             val step = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) SyncSettings.STEP_MS else -SyncSettings.STEP_MS
@@ -883,14 +1503,6 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", v).apply()
             val text = if (v == 0) getString(R.string.jitter_off)
             else getString(R.string.jitter_manual, v.toString())
-            appendLog(text)
-            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-            return true
-        }
-        if (mirrorActive && isOkKey(keyCode) && event.repeatCount == 0) {
-            SyncSettings.jitterBufferMs = SyncSettings.AUTO
-            getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
-            val text = getString(R.string.jitter_auto, SyncSettings.autoJitterMs.toString())
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
@@ -907,15 +1519,6 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             }
             appendLog(text)
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-            return true
-        }
-        if (keyCode == KeyEvent.KEYCODE_MENU && overlayView.visibility == android.view.View.VISIBLE) {
-            toggleAutostart()
-            return true
-        }
-        // MENU tusu olmayan kumandalar (ör. Mi TV Stick) icin: QR ekraninda OK'a basmak.
-        if (isOkKey(keyCode) && overlayView.visibility == android.view.View.VISIBLE) {
-            if (event.repeatCount == 0) toggleAutostart()
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -959,25 +1562,45 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         infoLabel.text = baseLabel + "\n" + getString(R.string.autostart_hint, getString(if (autostartOn()) R.string.on else R.string.off))
     }
 
+    /** Her seyi durdurur ve QR ekranina doner (Geri tusu ve uyku zamanlayicisi kullanir). */
+    private fun stopPlayback() {
+        uploadQueue.clear()
+        playingUrl = null
+        player?.stop()
+        photoView.visibility = android.view.View.GONE
+        if (airplayVideoActive) endAirplayVideo()
+        airplayServer?.stopAllMirrors()
+        // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
+        mirrorActive = false
+        lastMirrorW = 0
+        lastMirrorH = 0
+        mirrorZoom = 1f
+        panX = 0f
+        panY = 0f
+        audioStreaming = false
+        lastTrack = null
+        lastArt = null
+        npDismissed = false
+        abandonAudioFocus()
+        syncStreamLocks()
+        updateNowPlaying()
+        overlayView.visibility = android.view.View.VISIBLE
+    }
+
     /** Geri tusuna basinca oynatmayi durdur, QR ekranina don. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (menuOpen) {
+            menuBack()
+            return
+        }
+        if (nowPlayingView.visibility == android.view.View.VISIBLE) {
+            npDismissed = true
+            updateNowPlaying()
+            return
+        }
         if (overlayView.visibility == android.view.View.GONE) {
-            player?.stop()
-            photoView.visibility = android.view.View.GONE
-            if (airplayVideoActive) endAirplayVideo()
-            airplayServer?.stopAllMirrors()
-            // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
-            mirrorActive = false
-            lastMirrorW = 0
-            lastMirrorH = 0
-            mirrorZoom = 1f
-            panX = 0f
-            panY = 0f
-            audioStreaming = false
-            abandonAudioFocus()
-            syncStreamLocks()
-            overlayView.visibility = android.view.View.VISIBLE
+            stopPlayback()
         } else {
             super.onBackPressed()
         }

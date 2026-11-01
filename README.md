@@ -26,7 +26,7 @@ iPhone ve Android cihaz aynı Wi-Fi ağında olmalı.
 
 ## Android telefon/tablette kullanım
 
-Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: QR ekranı, AirPlay sunucusu, bağlantı izni penceresi (dokunmayla seçilir), video, fotoğraf ve ekran yansıtma. Aşağıdaki kumanda tuşu ayarları (ses/görüntü kaydırma, görüntü tamponu, MENU ile otomatik başlatma) yön/OK/MENU tuşlarıyla yapılır; dokunmatik ekranda bu tuşlar yoktur, bunlar için Bluetooth klavye ya da uzaktan kumanda gerekir. Telefon/tablette cihazın kendi ekranı ve hoparlörü kullanılır, ekran yansıtma sırasında ekran kapanmaz.
+Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: QR ekranı, AirPlay sunucusu, bağlantı izni penceresi (dokunmayla seçilir), video, fotoğraf ve ekran yansıtma. Aşağıdaki kumanda tuşu ayarları (ses/görüntü kaydırma, görüntü tamponu, otomatik başlatma) yön/OK/MENU tuşlarıyla açılan **TV menüsünden** yapılır; menü satırlarına dokunarak da ayar yapılabilir (dokununca artır/seç, uzun basınca azalt). Telefon/tablette cihazın kendi ekranı ve hoparlörü kullanılır, ekran yansıtma sırasında ekran kapanmaz.
 
 ## İmza ve güncelleme güvenliği
 
@@ -46,7 +46,7 @@ iPhone'da Müzik, Spotify, Podcasts gibi uygulamalarda AirPlay simgesinden "TV A
 
 Ekran yansıtırken ses görüntüyle kayık geliyorsa TV kumandasında **SAĞ/SOL** tuşlarına basın (her basış 20 ms, en çok ±500 ms). Ses görüntüden **geç** geliyorsa SAĞ (görüntü geciktirilir), **erken** geliyorsa SOL (ses geciktirilir). Ayar kaydedilir; ekranda kısa bir bilgi çıkar ve günlüğe yazılır.
 
-**Görüntü tamponu (Wi-Fi titremesi):** Kareler ağdan eşit aralıkla gelmez; geldikleri anda çizilirse görüntü takılır. Tampon, kareleri iPhone'un zaman damgasına göre eşit aralıkla çizer. Varsayılan **otomatik**: uygulama son birkaç saniyenin titremesini ölçüp tamponu 40–160 ms arasında kendisi ayarlar (artış hemen, azalış yavaş). Elle ayar için yansıtma sırasında **YUKARI/AŞAĞI** tuşları (20 ms'lik adımlar, 0–200 ms; 0 kapalı), **OK** tuşu otomatiğe döner. Tampon görüntüyü geciktirdiği için ses de aynı kadar geciktirilir (senkron bozulmaz), ama her şey o kadar daha geç görünür. Günlükteki `Titreme:` satırı titremenin dağılımını ve tamponu aşan kare sayısını, `Otomatik tampon:` satırı ayar değişimlerini gösterir.
+**Görüntü tamponu (Wi-Fi titremesi):** Kareler ağdan eşit aralıkla gelmez; geldikleri anda çizilirse görüntü takılır. Tampon, kareleri iPhone'un zaman damgasına göre eşit aralıkla çizer. Varsayılan **otomatik**: uygulama son birkaç saniyenin titremesini ölçüp tamponu 40–160 ms arasında kendisi ayarlar (artış hemen, azalış yavaş). Elle ayar için yansıtma sırasında **YUKARI/AŞAĞI** tuşları (20 ms'lik adımlar, 0–200 ms; 0 kapalı); menüde "Görüntü tamponu" satırında **OK** otomatiğe döner. Tampon görüntüyü geciktirdiği için ses de aynı kadar geciktirilir (senkron bozulmaz), ama her şey o kadar daha geç görünür. Günlükteki `Titreme:` satırı titremenin dağılımını ve tamponu aşan kare sayısını, `Otomatik tampon:` satırı ayar değişimlerini gösterir.
 
 ## AirPlay adını değiştirme
 
@@ -76,9 +76,32 @@ Bir iPhone ya da iPad ekran yansıtma/ses için bağlanınca TV'de kısa bir �
 
 QR ekranı 20 saniye boşta (tuşa basılmadan, dokunulmadan) kalırsa QR kodu ve yazılar eski DVD logosu gibi ekranda sekmeye başlar, duvara çarpınca renk değiştirir ve köşeye tam isabet ederse 🎉 çıkar. Aynı zamanda ekran yanmasını önler. Herhangi bir tuşa basınca ya da dokununca durur ve QR yerine döner; bir bağlantı başlayınca ekran zaten değişir.
 
+## TV menüsü
+
+QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna basınca ekranda bir menü açılır. **MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) OK (orta) tuşu aynı menüyü açar.** Menü 30 saniye hiçbir tuşa basılmazsa ya da **Geri** ile kapanır.
+
+| Satır | Değiştirme |
+|---|---|
+| Açılışta otomatik başlat | SOL/SAĞ/OK açıp kapatır |
+| Uyku zamanlayıcısı | SOL/SAĞ kapalı → 15 → 30 → 60 → 90 → 120 dk, OK kapatır; süre dolunca oynatma ve yansıtma durur, QR ekranına dönülür (yalnızca o oturumda geçerli) |
+| Ses/görüntü kayması | SOL/SAĞ ±20 ms, OK sıfırlar |
+| Görüntü tamponu | SOL/SAĞ ±20 ms (0 = kapalı), OK otomatiğe döner |
+| Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
+| Ekrana sığdırma | SOL/SAĞ/OK: Sığdır ↔ Doldur (kırparak); yansıtırken ve kayıtlı |
+| Saat | SOL/SAĞ/OK: QR ekranındaki saat ve tarih açık/kapalı |
+| İstatistikler | SOL/SAĞ/OK: sağ üstte çözünürlük, kare hızı, tampon, atlanan kare, Wi-Fi sinyali ve bağlı cihaz paneli |
+| Güvenilen cihazlar | SAĞ/OK alt menüyü açar; satırda OK o cihazın güvenini kaldırır (★ kalıcı), Geri ile dönülür |
+| Güncellemeyi kontrol et (kurulu sürüm yazar) | OK: GitHub'daki son sürümü sorar, sonucu ekranda gösterir |
+| Uygulamadan çık | OK (ön plan servisi ve sunucular da durur) |
+| Kapat | OK |
+
+QR ekranında bağlı iPhone'un adı ve IP'si yeşil bir satırla görünür. Müzik çalarken (kapak ve şarkı bilgisi gelince) tam ekran **"Şimdi çalıyor"** ekranı açılır: büyük kapak, bulanık arka plan, şarkı/sanatçı/albüm; **Geri** tuşu QR ekranına döndürür, sonraki şarkıda yeniden açılır. QR ekranı bekleme saatini de gösterir.
+
+Gezinme YUKARI/AŞAĞI ile yapılır. Dokunmatik ekranda satıra dokunmak "OK/artır", uzun basmak "azalt" işi görür. Menü kapalıyken yansıtma sırasındaki eski kısayollar sürer: SAĞ/SOL ses-görüntü kayması, YUKARI/AŞAĞI görüntü tamponu.
+
 ## Açılışta otomatik başlatma
 
-Ana (QR) ekranındayken kumandanın **MENU** tuşu "TV açılınca otomatik başlat" ayarını açıp kapatır (varsayılan kapalı). MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) **OK (orta) tuşuna basmak** aynı işi yapar. Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
+"TV açılınca otomatik başlat" ayarı **TV menüsündeki** ilk satırdır (varsayılan kapalı; bkz. [TV menüsü](#tv-menüsü)). Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
 
 ## Fotoğraf AirPlay (`/photo`)
 
@@ -103,6 +126,16 @@ Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada oldu
 Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>` aynı sayfayı Ayarlar bölümünde açar, `/log?pin=<PIN>` düz metin günlüğü verir.
 
 Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
+
+## Web kumandası (yeni arayüz)
+
+Web sayfası (`http://<cihaz-ip>:8080`) bir medya sunucusu kumandası gibi çalışır: altta **Kumanda · Gönder · Ayarlar** sekmeleri (Güncelle ve Günlük, Ayarlar'ın altında).
+
+- **Kumanda:** "Şu an oynuyor" kartı (video adı ya da müzikte şarkı/sanatçı, ilerleme çubuğu, geçen/toplam süre), büyük oynat/duraklat, ±10 sn, ses kaydırıcısı ve sessize alma, Sonraki/Durdur, yansıtma sırasında yakınlaştırma düğmeleri ve bekleyen videoların sırası. Durum saniyede bir `GET /api/status` ile yenilenir; ilerleme çubuğunu sürükleyerek ileri/geri sarılır.
+- **Gönder:** Seçilen dosyaların listesi görünür; birden fazla video sırayla yüklenir. Dosya adı TV'ye `X-Name` başlığıyla iletilir ve "Şu an oynuyor" kartında görünür.
+- **Bağlantıdan oynat (Gönder sekmesi):** Düz adresli (MP4/HLS) bir videonun adresini yapıştırıp TV'de oynatabilirsiniz (`POST /api/play?u=`). Safari'de AirPlay simgesi çıkmayan sitelerde **Yer imi kodunu kopyala** düğmesiyle alınan kodu bir yer imine yapıştırın; video sayfasındayken yer imine dokununca sayfadaki videonun gerçek adresi bulunup TV'ye gönderilir. `blob:` adresli (YouTube, Netflix gibi MSE) ve DRM'li videolarda adres bulunamaz; onlar için ekran yansıtma kullanılır (DRM'li içerik yansıtmada da siyah görünür). Uyarı: video sunucusu TV'nin isteğini (Referer/çerez olmadan) reddedebilir.
+- **Ana ekrana ekle:** Safari'de Paylaş > Ana Ekrana Ekle ile sayfa adres çubuğu olmadan, uygulama gibi açılır (simge ve `manifest.json` sunucudan gelir). Bu tam ekran modunda PIN cihazda hatırlanır; normal tarayıcı sekmesinde yalnızca oturum boyunca tutulur.
+- Açık ve koyu tema telefonun ayarına göre değişir; renkler WCAG AA kontrastını (4,5:1) sağlar.
 
 ## Elle güncelleme (APK gönderme)
 

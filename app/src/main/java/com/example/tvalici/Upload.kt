@@ -18,7 +18,7 @@ import kotlin.concurrent.withLock
  * Devam eden bir video yuklemesi. Sunucu dosyayi yazdikca [update] cagirir,
  * oynatici [awaitBytes] ile yeni veri bekler. Boylece yukleme bitmeden oynatma baslayabilir.
  */
-class Upload(val file: File, val totalSize: Long, val queued: Boolean = false) {
+class Upload(val file: File, val totalSize: Long, val queued: Boolean = false, val name: String = "") {
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
 

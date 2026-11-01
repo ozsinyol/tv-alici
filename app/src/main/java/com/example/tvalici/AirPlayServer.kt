@@ -48,7 +48,10 @@ interface VideoEvents {
     fun audioArt(image: ByteArray?) {}
 
     /** Bir iPhone/iPad yayina baglandi (cihaz adi bilinmiyorsa null). */
-    fun deviceConnected(name: String?) {}
+    fun deviceConnected(name: String?, ip: String) {}
+
+    /** O cihazin baglantisi kapandi. */
+    fun deviceDisconnected() {}
 
     /** Ses akisi basladi (ses odagi ve kilitler icin). */
     fun audioStarted() {}
@@ -112,6 +115,7 @@ class AirPlayServer(
         var aesKey: ByteArray? = null
         var aesIv: ByteArray? = null // SETUP 1'deki eiv (ses AES-CBC IV'si)
         var ntp: NtpClient? = null
+        var announced = false // deviceConnected bildirildi
         var mirror: MirrorReceiver? = null
         var audio: AudioReceiver? = null
         var volumeDb = 0f
@@ -262,6 +266,7 @@ class AirPlayServer(
         } finally {
             synchronized(sessions) { sessions.remove(session) }
             if (reverse === session) reverse = null
+            if (session.announced) video.deviceDisconnected()
             val hadAudio = session.audio != null
             if (session.closeAll()) events.mirrorStopped()
             if (hadAudio) video.audioEnded()
@@ -637,7 +642,8 @@ class AirPlayServer(
             log("  SETUP 1: yayın anahtarı hazır")
             val devName = (root.objectForKey("name") as? NSString)?.content
                 ?.replace(Regex("[\\p{Cntrl}]"), " ")?.trim()?.take(40)?.takeIf { it.isNotEmpty() }
-            video.deviceConnected(devName)
+            video.deviceConnected(devName, s.socket.inetAddress?.hostAddress ?: "")
+            s.announced = true
 
             val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
             s.ntp?.stop()

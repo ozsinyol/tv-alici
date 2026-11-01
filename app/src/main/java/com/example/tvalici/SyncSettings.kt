@@ -42,3 +42,17 @@ object SyncSettings {
     val videoDelayMs: Int get() = maxOf(offsetMs, 0)
     val audioDelayMs: Int get() = maxOf(-offsetMs, 0) + activeJitterMs
 }
+
+/** Yansitma istatistikleri (TV menusundeki "Istatistikler" paneli icin). */
+object MirrorStats {
+    @Volatile
+    var frames = 0L
+
+    @Volatile
+    var dropped = 0L
+
+    fun reset() {
+        frames = 0L
+        dropped = 0L
+    }
+}
