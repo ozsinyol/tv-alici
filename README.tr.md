@@ -91,7 +91,7 @@ QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna
 | Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
 | Ekrana sığdırma | SOL/SAĞ/OK: Sığdır ↔ Doldur (kırparak); yansıtırken ve kayıtlı |
 | Saat | SOL/SAĞ/OK: QR ekranındaki saat ve tarih açık/kapalı |
-| İstatistikler | SOL/SAĞ/OK: sağ üstte çözünürlük, kare hızı, tampon, atlanan kare, Wi-Fi sinyali ve bağlı cihaz paneli |
+| İstatistikler | SOL/SAĞ/OK: sağ üstte çözünürlük, gelen kare hızı (iPhone'dan alınan kareler; ekrana çizilen değil), tampon, girişte atlanan kare (1 sn'lik besleme zaman aşımı), Wi-Fi sinyali ve bağlı cihaz paneli |
 | Güvenilen cihazlar | SAĞ/OK alt menüyü açar; satırda OK o cihazın güvenini kaldırır (★ kalıcı), Geri ile dönülür |
 | Güncellemeyi kontrol et (kurulu sürüm yazar) | OK: GitHub'daki son sürümü sorar, sonucu ekranda gösterir |
 | Uygulamadan çık | OK (ön plan servisi ve sunucular da durur) |

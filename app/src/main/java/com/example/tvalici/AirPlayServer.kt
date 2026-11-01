@@ -85,7 +85,11 @@ class AirPlayServer(
 ) {
     @Volatile
     private var running = false
+    @Volatile
     private var serverSocket: ServerSocket? = null
+
+    // Kimlik dogrulamadan once bile istek govdesi bu kadar bellek ayirabilir; asiri buyuk istek baglantiyi keser.
+    private val maxBody = 32 * 1024 * 1024
     private val sessions = mutableSetOf<Session>()
 
     /** iPhone'un /reverse ile actigi olay kanali; TV -> iPhone olaylari buradan gider. */
@@ -174,6 +178,7 @@ class AirPlayServer(
             // kapanirken hata onemsiz
         }
         stopAllMirrors()
+        synchronized(photoCache) { photoCache.clear() }
     }
 
     /** TV'de oynatma durumu degisti (loading / playing / paused / stopped): iPhone'a olay yollar. */
@@ -245,6 +250,10 @@ class AirPlayServer(
                     }
 
                     val length = headers["content-length"]?.toIntOrNull() ?: 0
+                    if (length < 0 || length > maxBody) {
+                        log("Geçersiz/aşırı büyük istek gövdesi ($length B), bağlantı kapatıldı")
+                        return
+                    }
                     val body = ByteArray(length)
                     var read = 0
                     while (read < length) {
@@ -642,8 +651,10 @@ class AirPlayServer(
             log("  SETUP 1: yayın anahtarı hazır")
             val devName = (root.objectForKey("name") as? NSString)?.content
                 ?.replace(Regex("[\\p{Cntrl}]"), " ")?.trim()?.take(40)?.takeIf { it.isNotEmpty() }
-            video.deviceConnected(devName, s.socket.inetAddress?.hostAddress ?: "")
-            s.announced = true
+            if (!s.announced) {
+                video.deviceConnected(devName, s.socket.inetAddress?.hostAddress ?: "")
+                s.announced = true
+            }
 
             val timingPort = (root.objectForKey("timingPort") as? NSNumber)?.intValue() ?: 0
             s.ntp?.stop()

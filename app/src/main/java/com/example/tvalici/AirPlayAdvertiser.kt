@@ -61,8 +61,11 @@ class AirPlayAdvertiser(
 
     /** Ad degisince servisleri yeni adla yeniden yayinlar. */
     fun restart() {
-        stop()
-        handler.postDelayed({ start() }, 800)
+        // Web sunucusu thread'inden de cagrilir; listeners listesine yalnizca ana thread dokunsun.
+        handler.post {
+            stop()
+            handler.postDelayed({ start() }, 800)
+        }
     }
 
     fun start() {

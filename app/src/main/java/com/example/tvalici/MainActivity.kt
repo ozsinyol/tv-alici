@@ -77,11 +77,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStarted() {
             mirrorActive = true
-            mirrorZoom = 1f
-            panX = 0f
-            panY = 0f
             logWifi()
             runOnUiThread {
+                mirrorZoom = 1f
+                panX = 0f
+                panY = 0f
                 syncStreamLocks()
                 updateNowPlaying()
                 player?.stop()
@@ -97,12 +97,13 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStopped() {
             mirrorActive = false
-            lastMirrorW = 0
-            lastMirrorH = 0
-            mirrorZoom = 1f
-            panX = 0f
-            panY = 0f
             runOnUiThread {
+                // mirrorSize ile ayni kuyrukta oldugu icin, bitmis bir yansitmanin boyutu geri yazilamaz.
+                lastMirrorW = 0
+                lastMirrorH = 0
+                mirrorZoom = 1f
+                panX = 0f
+                panY = 0f
                 syncStreamLocks()
                 updateNowPlaying()
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
@@ -341,6 +342,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             }
         }
 
+        // Onceki oturumdan kalan yuklenmis videolar (GB'larca yer tutabilir) sunucu baslamadan silinir.
+        cacheDir.listFiles()?.forEach { f -> if (f.name.startsWith("video_")) runCatching { f.delete() } }
+
         try {
             server = VideoServer(
                 port,
@@ -372,7 +376,6 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         startAirPlayService()
         mainHandler.post(statusTicker)
         watchNetwork()
-        mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         updater.check()
     }
@@ -496,7 +499,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                     wifiLock = wm?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "tvalici:stream")
                         ?.apply { setReferenceCounted(false) }
                 }
-                // Ust sinirli: unutulursa pil bitmesin (her ses/yansitma baslangicinda yenilenir).
+                // Ust sinirli: unutulursa pil bitmesin. 6 saat dolarsa kilit kendiliginden birakilir; akis suruyorsa bir sonraki ses/yansitma durum degisiminde yeniden alinir.
                 if (wakeLock?.isHeld != true) wakeLock?.acquire(6 * 60 * 60 * 1000L)
                 if (wifiLock?.isHeld != true) wifiLock?.acquire()
             } else {
@@ -597,7 +600,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
         var sample = 1
-        while (bounds.outWidth / sample > 2560 || bounds.outHeight / sample > 2560) sample *= 2
+        val dm = resources.displayMetrics
+        val limit = minOf(2560, maxOf(maxOf(dm.widthPixels, dm.heightPixels), 1920))
+        while (bounds.outWidth / sample > limit || bounds.outHeight / sample > limit) sample *= 2
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
         return try {
             BitmapFactory.decodeByteArray(data, 0, data.size, opts)
@@ -1238,8 +1243,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         clockDate.visibility = vis
         if (!clockOn) return
         val now = java.util.Date()
-        clockTime.text = android.text.format.DateFormat.getTimeFormat(this).format(now)
-        clockDate.text = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
+        val t = android.text.format.DateFormat.getTimeFormat(this).format(now)
+        val d = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
+        if (clockTime.text.toString() != t) clockTime.text = t // her saniye gereksiz yerlesim olmasin
+        if (clockDate.text.toString() != d) clockDate.text = d
     }
 
     private val statsView: TextView by lazy {
@@ -1277,6 +1284,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun updateStats() {
         if (!statsOn) {
             statsView.visibility = android.view.View.GONE
+            lastStatsAt = 0L // panel acilinca ilk kare hizi uzun donemin ortalamasi olmasin
             return
         }
         val now = SystemClock.elapsedRealtime()
@@ -1285,14 +1293,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         lastStatsAt = now
         val sb = StringBuilder()
         if (mirrorActive && lastMirrorW > 0) {
-            sb.append("Mirror   ${lastMirrorW}x$lastMirrorH @ ${"%.0f".format(java.util.Locale.US, maxOf(0.0, fps))} fps\n")
+            sb.append("Mirror   ${lastMirrorW}x$lastMirrorH  in ${"%.0f".format(java.util.Locale.US, maxOf(0.0, fps))} fps\n")
         } else {
             sb.append("Mirror   -\n")
         }
         sb.append("Buffer   ").append(
             if (SyncSettings.jitterBufferMs == SyncSettings.AUTO) "auto ${SyncSettings.autoJitterMs} ms" else "${SyncSettings.jitterBufferMs} ms"
         ).append('\n')
-        sb.append("Dropped  ${MirrorStats.dropped}\n")
+        sb.append("In-drops ${MirrorStats.dropped}\n")
         sb.append("A/V sync ${SyncSettings.offsetMs} ms\n")
         sb.append("Wi-Fi    ${wifiSummary()}")
         connectedName?.let { sb.append("\nDevice   ").append(it).append(if (connectedIp.isNotEmpty()) " ($connectedIp)" else "") }
@@ -1345,6 +1353,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
     private val uploadQueue = ArrayDeque<Upload>()
+
+    /** Kuyrugu bosaltir ve bekleyen yuklemelerin dosyalarini siler (onbellek dolmasin). */
+    private fun clearQueue() {
+        uploadQueue.forEach { runCatching { it.file.delete() } }
+        uploadQueue.clear()
+    }
     private var playingUrl: String? = null // /api/play ile acilan adres (durum kartinda gosterilir)
     private var currentUpload: Upload? = null
 
@@ -1357,7 +1371,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             appendLog("Kuyruğa eklendi (${uploadQueue.size} bekliyor)")
             return
         }
-        uploadQueue.clear()
+        clearQueue()
         start(upload)
     }
 
@@ -1375,7 +1389,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun playUrl(url: String) {
         val uri = Uri.parse(url)
         if (uri.scheme != "http" && uri.scheme != "https") return
-        uploadQueue.clear()
+        clearQueue()
         currentUpload = null
         playingUrl = (uri.host ?: "") + (uri.lastPathSegment?.let { "/$it" } ?: "")
         overlayView.visibility = android.view.View.GONE
@@ -1443,7 +1457,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 overlayView.visibility = android.view.View.VISIBLE
             }
             "stop" -> {
-                uploadQueue.clear()
+                clearQueue()
                 p.stop()
                 overlayView.visibility = android.view.View.VISIBLE
             }
@@ -1564,7 +1578,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     /** Her seyi durdurur ve QR ekranina doner (Geri tusu ve uyku zamanlayicisi kullanir). */
     private fun stopPlayback() {
-        uploadQueue.clear()
+        clearQueue()
         playingUrl = null
         player?.stop()
         photoView.visibility = android.view.View.GONE
@@ -1647,6 +1661,19 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        mainHandler.removeCallbacks(bounceTicker)
+        mainHandler.postDelayed(bounceTicker, 1000)
+    }
+
+    override fun onStop() {
+        // Arka plandayken zipalayan QR animasyonu (25 uyanma/sn) bosuna calismasin.
+        mainHandler.removeCallbacks(bounceTicker)
+        if (bouncing) stopBounce()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         audioStreaming = false
         mirrorActive = false
@@ -1674,8 +1701,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun qrBitmap(text: String, size: Int): Bitmap {
         val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size)
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
-        for (x in 0 until size) for (y in 0 until size)
-            bmp.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)
+        val pixels = IntArray(size * size)
+        for (y in 0 until size) for (x in 0 until size)
+            pixels[y * size + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE
+        bmp.setPixels(pixels, 0, size, 0, 0, size, size)
         return bmp
     }
 }

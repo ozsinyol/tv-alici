@@ -94,7 +94,7 @@ While on the QR screen or while mirroring, press the remote's **MENU** key and a
 | Zoom (only while mirroring) | LEFT/RIGHT ×1.25, OK resets to 1× |
 | Screen fit | LEFT/RIGHT/OK: Fit ↔ Fill (crop); saved |
 | Clock | LEFT/RIGHT/OK: clock and date on the QR screen on/off |
-| Statistics | LEFT/RIGHT/OK: panel in the top right with resolution, frame rate, buffer, dropped frames, Wi-Fi signal and the connected device |
+| Statistics | LEFT/RIGHT/OK: panel in the top right with the resolution, incoming frame rate (frames received from the iPhone, not frames drawn), buffer, input drops (frames dropped after a 1-second feed timeout), Wi-Fi signal and the connected device |
 | Trusted devices | RIGHT/OK opens a submenu; OK on a row removes that device's trust (★ = permanent), Back returns |
 | Check for updates (shows the installed version) | OK: asks GitHub for the latest version and shows the result on screen |
 | Quit app | OK (the foreground service and servers stop too) |
