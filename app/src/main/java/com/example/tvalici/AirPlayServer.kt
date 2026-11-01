@@ -50,6 +50,9 @@ interface VideoEvents {
     /** Bir iPhone/iPad yayina baglandi (cihaz adi bilinmiyorsa null). */
     fun deviceConnected(name: String?) {}
 
+    /** Ses akisi basladi (ses odagi ve kilitler icin). */
+    fun audioStarted() {}
+
     /** Muzik AirPlay oturumu bitti; sarki bilgisi temizlenmeli. */
     fun audioEnded() {}
 }
@@ -712,6 +715,7 @@ class AirPlayServer(
                             if (receiver.start()) {
                                 receiver.setVolumeDb(s.volumeDb)
                                 s.audio = receiver
+                                video.audioStarted()
                             } else {
                                 s.udp.add(data)
                                 s.udp.add(control)
