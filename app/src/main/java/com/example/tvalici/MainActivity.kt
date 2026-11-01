@@ -29,6 +29,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -84,6 +87,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStopped() {
             mirrorActive = false
+            lastMirrorW = 0
+            lastMirrorH = 0
             runOnUiThread {
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
@@ -273,6 +278,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
+        // Ekran doner ya da yerlesim degisirse (configChanges oldugu icin Activity yeniden olusmaz) yansitmayi yeniden sigdir.
+        rootLayout.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if ((r - l != oldR - oldL || b - t != oldB - oldT) && lastMirrorW > 0 && lastMirrorH > 0) {
+                fitMirror(lastMirrorW, lastMirrorH)
+            }
+        }
 
         try {
             server = VideoServer(
@@ -458,7 +469,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yansitilan goruntuyu en-boy oranini bozmadan ekrana sigdirir (kenarlarda siyah bosluk). */
+    private var lastMirrorW = 0
+    private var lastMirrorH = 0
+
     private fun fitMirror(videoW: Int, videoH: Int) {
+        lastMirrorW = videoW
+        lastMirrorH = videoH
         val cw = rootLayout.width
         val ch = rootLayout.height
         if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
@@ -686,6 +702,17 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
+    /** Tam ekran: durum ve gezinme cubuklari gizlenir (telefonda yansitma tum ekrani kullansin). */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val wasBouncing = bouncing
         userActivity()
