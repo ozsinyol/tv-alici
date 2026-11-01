@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · [English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · **Italiano** · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Trasforma un dispositivo Android (Android TV, telefono, tablet, set-top box) in un **ricevitore AirPlay** per iPhone e iPad: mirroring dello schermo, video, foto, streaming solo audio (Musica, Spotify, …) e invio di video da Safari senza installare nulla.
 
 All'avvio l'app mostra un codice QR. Inquadralo con la fotocamera dell'iPhone per aprire il telecomando web, oppure scegli **TV Alici** (puoi rinominarlo) in Centro di Controllo > Mirroring dello schermo o nell'elenco AirPlay.

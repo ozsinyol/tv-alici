@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · [English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Русский** · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Превращает Android-устройство (Android TV, телефон, планшет, приставку) в **приёмник AirPlay** для iPhone и iPad: дублирование экрана, видео, фото, передача только звука (Музыка, Spotify, …) и отправка видео из Safari без установки чего-либо.
 
 При запуске приложение показывает QR-код. Отсканируйте его камерой iPhone, чтобы открыть веб-пульт, или выберите **TV Alici** (имя можно изменить) в Пункте управления > Повтор экрана либо в списке AirPlay.
