@@ -202,10 +202,10 @@ class VideoServer(
   #ad{width:60%}
   button{font-size:17px;padding:12px 18px;border:0;border-radius:12px;background:#0a84ff;color:#fff;margin:4px}
   button.gri{background:#3a3a3c}
-  nav{display:flex;gap:6px;margin-bottom:8px}
-  nav button.sekme{flex:1;margin:0;background:#2c2c2e;color:#aaa}
-  nav button.sekme.secili{background:#0a84ff;color:#fff}
-  section{text-align:center}
+  section{text-align:center;margin-bottom:8px}
+  section>h2:first-child{margin-top:20px}
+  details{text-align:center}
+  summary{font-size:16px;color:#aaa;margin:28px 0 8px;cursor:pointer}
   progress{width:100%;height:14px;margin-top:20px}
   #durum{margin:10px 0;color:#ffd60a;min-height:1.3em;text-align:center}
   ul{list-style:none;padding:0;margin:0;text-align:left}
@@ -215,14 +215,10 @@ class VideoServer(
 <body>
   <h1>AirPlay for Android</h1>
   <div class="pin">PIN: <input type="text" id="pin" inputmode="numeric" maxlength="4" autocomplete="off"></div>
-  <nav>
-    <button class="sekme" data-sekme="gonder">Gönder</button>
-    <button class="sekme" data-sekme="ayar">Ayarlar</button>
-    <button class="sekme" data-sekme="gunluk">Günlük</button>
-  </nav>
   <div id="durum" role="status"></div>
 
-  <section id="s-gonder">
+  <section id="gonder">
+    <h2>TV'ye gönder</h2>
     <input type="file" id="dosya" accept="video/*"><br>
     <button id="btn">Gönder</button>
     <progress id="ilerleme" value="0" max="100" hidden></progress>
@@ -239,7 +235,7 @@ class VideoServer(
     </div>
   </section>
 
-  <section id="s-ayar" hidden>
+  <section id="ayar">
     <h2>AirPlay sunucu adı</h2>
     <div><input type="text" id="ad" maxlength="32"> <button id="adKaydet">Kaydet</button></div>
     <h2>Güvenilen cihazlar</h2>
@@ -247,10 +243,11 @@ class VideoServer(
     <button class="gri" id="hepsiniSil">Hepsini sil</button>
   </section>
 
-  <section id="s-gunluk" hidden>
+  <details id="gunluk">
+    <summary>Günlük</summary>
     <button class="gri" id="yenile">Yenile</button>
-    <pre id="gunluk"></pre>
-  </section>
+    <pre id="gunlukMetin"></pre>
+  </details>
 
 <script>
 var pinInput = document.getElementById('pin');
@@ -262,7 +259,7 @@ try { kayitli = sessionStorage.getItem('pin') || ''; } catch (e) {}
 pinInput.value = params.get('pin') || kayitli;
 pinInput.onchange = function () {
   try { sessionStorage.setItem('pin', pin()); } catch (e) {}
-  sekme(location.hash.replace('#', ''));
+  hepsiniYukle();
 };
 if (params.get('pin')) { try { sessionStorage.setItem('pin', pin()); } catch (e) {} }
 
@@ -280,30 +277,19 @@ function api(yol, yontem) {
   });
 }
 
-var adlar = ['gonder', 'ayar', 'gunluk'];
-function sekme(ad) {
-  if (adlar.indexOf(ad) < 0) ad = 'gonder';
-  for (var i = 0; i < adlar.length; i++) {
-    document.getElementById('s-' + adlar[i]).hidden = adlar[i] !== ad;
-  }
-  var b = document.querySelectorAll('button.sekme');
-  for (var j = 0; j < b.length; j++) {
-    b[j].className = 'sekme' + (b[j].getAttribute('data-sekme') === ad ? ' secili' : '');
-  }
+function hepsiniYukle() {
   mesaj('');
-  if (history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#' + ad);
-  if (ad === 'ayar') ayarYukle();
-  if (ad === 'gunluk') gunlukYukle();
-}
-var sb = document.querySelectorAll('button.sekme');
-for (var k = 0; k < sb.length; k++) {
-  sb[k].onclick = function () { sekme(this.getAttribute('data-sekme')); };
+  if (!pin()) { mesaj('Önce PIN gir.'); return; }
+  ayarYukle();
+  if (document.getElementById('gunluk').open) gunlukYukle();
 }
 
 function ayarYukle() {
-  if (!pin()) { mesaj('Önce PIN gir.'); return; }
-  api('/api/name').then(function (t) { document.getElementById('ad').value = t; }).catch(hata);
-  listeYukle();
+  // Yanlis PIN kilit sayacindan tek hak yesin: once ad, basariliysa liste.
+  api('/api/name').then(function (t) {
+    document.getElementById('ad').value = t;
+    listeYukle();
+  }).catch(hata);
 }
 
 function listeYukle() {
@@ -347,14 +333,14 @@ document.getElementById('hepsiniSil').onclick = function () {
 };
 
 function gunlukYukle() {
-  if (!pin()) { mesaj('Önce PIN gir.'); return; }
   api('/log').then(function (t) {
-    var p = document.getElementById('gunluk');
+    var p = document.getElementById('gunlukMetin');
     p.textContent = t;
     p.scrollTop = p.scrollHeight;
   }).catch(hata);
 }
 document.getElementById('yenile').onclick = gunlukYukle;
+document.getElementById('gunluk').ontoggle = function () { if (this.open && pin()) gunlukYukle(); };
 
 function baslat(f) {
   var xhr = new XMLHttpRequest();
@@ -386,7 +372,8 @@ for (var i = 0; i < dugmeler.length; i++) {
   };
 }
 
-sekme(location.hash.replace('#', ''));
+if (location.hash === '#gunluk') document.getElementById('gunluk').open = true;
+hepsiniYukle();
 </script>
 </body></html>
 """
