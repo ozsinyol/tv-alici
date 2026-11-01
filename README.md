@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · **English** · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Turns an Android device (Android TV, phone, tablet, set-top box, smart display) into an **AirPlay receiver** for iPhones and iPads: screen mirroring, video, photos, audio-only streaming (Music, Spotify, …) and video upload from Safari without installing anything.
 
 When it starts, the app shows a QR code. Scan it with the iPhone camera, pick a video on the page that opens, and it plays on the device. The device also appears on the network as an AirPlay receiver named "TV Alici"; choose it in Control Center > Screen Mirroring or in any AirPlay list.
@@ -149,3 +151,7 @@ Notes: the app must be open on the TV (on the QR screen). If the app has not bee
 
 - The log is not shown on the TV screen; it can only be read from the web page.
 - On the iPhone, `http://<tv-ip>:8080/log?pin=<PIN>` shows the whole log.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building, project layout and translation rules, and [SECURITY.md](SECURITY.md) for how to report a vulnerability privately.

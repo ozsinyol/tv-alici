@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · [English](README.md) · **Español** · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Convierte un dispositivo Android (Android TV, teléfono, tableta, caja) en un **receptor AirPlay** para iPhone y iPad: duplicación de pantalla, vídeo, fotos, transmisión solo de audio (Música, Spotify, …) y envío de vídeos desde Safari sin instalar nada.
 
 Al iniciarse, la app muestra un código QR. Escanéalo con la cámara del iPhone para abrir el mando web, o elige **TV Alici** (puedes cambiarle el nombre) en Centro de control > Duplicar pantalla o en la lista de AirPlay.

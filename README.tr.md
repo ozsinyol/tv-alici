@@ -2,6 +2,8 @@
 
 🌐 **Türkçe** · [English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Android cihazı (Android TV, telefon, tablet, Android kutu/ekran) iPhone'lar için bir **AirPlay sunucusu** yapan uygulama: iPhone'dan ekran yansıtma, video, fotoğraf ve (Safari'den, uygulama kurmadan) video yükleme.
 
 Uygulama açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfadan video seçilir, cihazda oynar. Ayrıca ağda "TV Alici" adıyla bir AirPlay sunucusu olarak görünür; iPhone'un Denetim Merkezi ve AirPlay listesinde bu adla seçilir.
@@ -153,3 +155,7 @@ Notlar: Uygulama TV'de açık (QR ekranında) olmalıdır. Uygulamaya "bilinmeye
 
 - Günlük TV ekranında gösterilmez, yalnızca web sayfasından okunur.
 - iPhone'dan `http://<tv-ip>:8080/log?pin=<PIN>` adresi tüm günlüğü gösterir.
+
+## Katkı ve güvenlik
+
+Derleme, proje yapısı ve çeviri kuralları için [CONTRIBUTING.md](CONTRIBUTING.md) (İngilizce), güvenlik açığını özel olarak bildirmek için [SECURITY.md](SECURITY.md) (İngilizce) dosyasına bakın.

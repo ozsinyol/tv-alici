@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · [English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **简体中文** · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 把 Android 设备（Android TV、手机、平板、机顶盒）变成 iPhone 和 iPad 的 **AirPlay 接收器**：屏幕镜像、视频、照片、纯音频投送（音乐、Spotify 等），以及无需安装任何东西即可从 Safari 发送视频。
 
 应用启动后会显示二维码。用 iPhone 相机扫描即可打开网页遥控器；也可以在控制中心 > 屏幕镜像或 AirPlay 列表中选择 **TV Alici**（可改名）。

@@ -2,6 +2,8 @@
 
 🌐 [Türkçe](README.tr.md) · [English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · **日本語** · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+[![Build](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml/badge.svg)](https://github.com/ozsinyol/tv-alici/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/ozsinyol/tv-alici)](https://github.com/ozsinyol/tv-alici/releases/latest) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE) ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 Androidデバイス（Android TV、スマートフォン、タブレット、セットトップボックス）を、iPhoneやiPad向けの**AirPlayレシーバー**にします。画面ミラーリング、ビデオ、写真、音声のみのストリーミング（ミュージック、Spotifyなど）、そしてSafariから何もインストールせずにビデオを送信できます。
 
 起動するとアプリにQRコードが表示されます。iPhoneのカメラで読み取るとWebリモコンが開きます。または、コントロールセンターの「画面ミラーリング」やAirPlayの一覧から**TV Alici**（名前は変更できます）を選んでください。
