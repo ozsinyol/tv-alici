@@ -1,10 +1,14 @@
 package com.example.tvalici
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.PowerManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkRequest
@@ -77,6 +81,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             panY = 0f
             logWifi()
             runOnUiThread {
+                syncStreamLocks()
                 player?.stop()
                 airplayVideoActive = false
                 photoView.visibility = android.view.View.GONE
@@ -96,6 +101,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             panX = 0f
             panY = 0f
             runOnUiThread {
+                syncStreamLocks()
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
         }
@@ -317,6 +323,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             appendLog("AirPlay başlamadı: ${e.message}")
         }
 
+        startAirPlayService()
         watchNetwork()
         mainHandler.postDelayed(bounceTicker, 1000)
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
@@ -352,8 +359,92 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
+    // ---- Ses odagi ve kilitler: akis surerken CPU/Wi-Fi uyumasin, baska uygulamalarin sesi kissin ----
+
+    private var focusRequest: AudioFocusRequest? = null
+    private var audioStreaming = false
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+
+    override fun audioStarted() {
+        runOnUiThread {
+            audioStreaming = true
+            requestAudioFocus()
+            syncStreamLocks()
+        }
+    }
+
+    private fun requestAudioFocus() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                val req = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener { change -> appendLog("Ses odağı değişti: $change") }
+                    .build().also { focusRequest = it }
+                am.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+            }
+        } catch (e: Exception) {
+            appendLog("Ses odağı alınamadı: ${e.message}")
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(null)
+            }
+        } catch (e: Exception) {
+            // zaten birakilmis
+        }
+    }
+
+    /** Ses ya da yansitma suruyorsa CPU ve Wi-Fi kilitlerini tutar, bitince birakir. */
+    private fun syncStreamLocks() {
+        val need = audioStreaming || mirrorActive
+        try {
+            if (need) {
+                if (wakeLock == null) {
+                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "tvalici:stream").apply {
+                        setReferenceCounted(false)
+                    }
+                }
+                if (wifiLock == null) {
+                    val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                    @Suppress("DEPRECATION")
+                    wifiLock = wm?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "tvalici:stream")
+                        ?.apply { setReferenceCounted(false) }
+                }
+                // Ust sinirli: unutulursa pil bitmesin (her ses/yansitma baslangicinda yenilenir).
+                if (wakeLock?.isHeld != true) wakeLock?.acquire(6 * 60 * 60 * 1000L)
+                if (wifiLock?.isHeld != true) wifiLock?.acquire()
+            } else {
+                if (wakeLock?.isHeld == true) wakeLock?.release()
+                if (wifiLock?.isHeld == true) wifiLock?.release()
+            }
+        } catch (e: Exception) {
+            appendLog("Kilit hatası: ${e.message}")
+        }
+    }
+
     override fun audioEnded() {
         runOnUiThread {
+            audioStreaming = false
+            abandonAudioFocus()
+            syncStreamLocks()
             trackText.text = ""
             trackText.visibility = android.view.View.GONE
             trackArt.setImageDrawable(null)
@@ -883,6 +974,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             mirrorZoom = 1f
             panX = 0f
             panY = 0f
+            audioStreaming = false
+            abandonAudioFocus()
+            syncStreamLocks()
             overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()
@@ -920,7 +1014,22 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
+    /** Surecin arka planda oldurulmemesi icin on plan servisini baslatir (basarisiz olursa uygulama yine calisir). */
+    private fun startAirPlayService() {
+        try {
+            val i = Intent(this, AirPlayService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+        } catch (e: Exception) {
+            appendLog("Arka plan servisi başlamadı: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
+        audioStreaming = false
+        mirrorActive = false
+        abandonAudioFocus()
+        syncStreamLocks()
+        runCatching { stopService(Intent(this, AirPlayService::class.java)) }
         netCallback?.let { cb ->
             runCatching { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(cb) }
         }

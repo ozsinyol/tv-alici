@@ -60,6 +60,10 @@ Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep iz
 
 Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
 
+## Arka planda çalışma ve ses odağı
+
+Uygulama açılınca küçük bir bildirimle ön plan servisi başlatır; böylece uygulamadan çıkınca ya da ekran kapanınca Android süreci öldürmez, müzik kesilmez ve cihaz AirPlay listesinde kalır. Ses ya da yansıtma sürerken CPU ve Wi-Fi kilitleri tutulur (en çok 6 saat, akış bitince bırakılır). Ses başlayınca ses odağı alınır; cihazdaki başka bir uygulamanın sesi kısılır ya da duraklar. Uygulamayı kapatınca (Geri ile çıkış) servis de durur. Android 13 ve üstünde bildirim izni verilmediyse servis yine çalışır ama bildirim görünmeyebilir.
+
 ## Yansıtmada yakınlaştırma
 
 Ekran yansıtırken görüntü varsayılan olarak ekrana sığdırılır (kenarlarda siyah boşluk kalabilir). Dokunmatik ekranda iki parmakla sıkıştırarak 4 katına kadar yakınlaştırabilir, yakınlaşınca tek parmakla kaydırabilirsiniz. Dokunmatik olmayan cihazlarda web sayfasının Gönder sekmesindeki **🔍+ / 🔍− / 1×** düğmeleri aynı işi yapar (merkeze doğru yakınlaştırır). Yansıtma bitince ya da yeniden başlayınca yakınlaştırma sıfırlanır.

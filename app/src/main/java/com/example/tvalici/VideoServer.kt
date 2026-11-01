@@ -263,36 +263,50 @@ class VideoServer(
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light dark">
 <title>AirPlay for Android</title>
 <style>
+  :root{--bg:#f2f2f7;--card:#fff;--fg:#1c1c1e;--mut:#6e6e73;--line:#e5e5ea;--field:#f2f2f7;--btn:#e9e9ee;--btnfg:#1c1c1e;--acc:#0a84ff;--accfg:#fff;--warn:#b25e00}
+  @media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--fg:#fff;--mut:#98989f;--line:#2c2c2e;--field:#2c2c2e;--btn:#3a3a3c;--btnfg:#fff;--acc:#0a84ff;--accfg:#fff;--warn:#ffd60a}}
+  *{box-sizing:border-box}
   [hidden]{display:none!important}
-  body{font-family:-apple-system,sans-serif;background:#111;color:#fff;margin:0;padding:20px;max-width:560px;margin:0 auto}
-  h1{font-size:22px;text-align:center;margin:8px 0 16px}
-  h2{font-size:16px;color:#aaa;margin:28px 0 8px}
-  .pin{text-align:center;margin-bottom:12px}
-  input[type=text]{font-size:18px;padding:8px;border-radius:8px;border:0;background:#2c2c2e;color:#fff}
-  #pin{width:5em;text-align:center;font-size:20px}
-  #ad{width:60%}
-  button{font-size:17px;padding:12px 18px;border:0;border-radius:12px;background:#0a84ff;color:#fff;margin:4px}
-  button.gri{background:#3a3a3c}
-  .sekmeler{display:flex;gap:6px;margin:0 0 8px}
-  .sekmeler button{flex:1;margin:0;padding:10px 4px;font-size:15px;background:#2c2c2e;color:#ddd}
-  .sekmeler button.aktif{background:#0a84ff;color:#fff}
-  section{text-align:center;margin-bottom:8px}
-  section>h2:first-child{margin-top:20px}
-  details{text-align:center}
-  .not{color:#aaa;font-size:14px;margin:0 0 8px}
-  summary{font-size:16px;color:#aaa;margin:28px 0 8px;cursor:pointer}
-  progress{width:100%;height:14px;margin-top:20px}
-  #durum{margin:10px 0;color:#ffd60a;min-height:1.3em;text-align:center}
-  ul{list-style:none;padding:0;margin:0;text-align:left}
-  li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2c2c2e}
-  pre{text-align:left;background:#1c1c1e;border-radius:10px;padding:10px;font-size:12px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:16px;max-width:560px;margin:0 auto;-webkit-text-size-adjust:100%}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px}
+  h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.3px}
+  .pin{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:14px;font-weight:600}
+  input[type=text]{font:inherit;font-size:17px;padding:11px 12px;border-radius:12px;border:1px solid transparent;background:var(--field);color:var(--fg);min-width:0;width:100%}
+  input[type=text]:focus{outline:2px solid var(--acc);outline-offset:0}
+  #pin{width:5.2em;text-align:center;font-size:18px;font-weight:700;letter-spacing:3px;padding:8px;background:var(--card);border:1px solid var(--line)}
+  button{font:inherit;font-size:16px;font-weight:600;padding:12px 16px;min-height:48px;border:0;border-radius:12px;background:var(--acc);color:var(--accfg);cursor:pointer;transition:filter .15s,transform .05s}
+  button:active{transform:scale(.98);filter:brightness(.92)}
+  button.gri{background:var(--btn);color:var(--btnfg)}
+  .sekmeler{display:flex;gap:4px;padding:4px;background:var(--btn);border-radius:14px;margin:0 0 14px}
+  .sekmeler button{flex:1;min-height:40px;padding:8px 4px;font-size:14px;background:transparent;color:var(--mut);border-radius:10px}
+  .sekmeler button.aktif{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  section{display:block;background:var(--card);border-radius:16px;padding:6px 16px 16px;margin-bottom:14px}
+  h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:18px 0 10px}
+  .not{color:var(--mut);font-size:14px;line-height:1.4;margin:0 0 12px}
+  .satir{display:flex;gap:8px;align-items:stretch}
+  .satir button{flex:none}
+  .izgara{display:grid;gap:8px;margin-bottom:8px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  .izgara .genis{grid-column:1/-1}
+  input[type=file]{width:100%;font-size:15px;color:var(--mut);padding:10px;border:1.5px dashed var(--line);border-radius:12px;background:var(--field);margin-bottom:10px}
+  input[type=file]::file-selector-button{font:inherit;font-weight:600;border:0;border-radius:8px;background:var(--btn);color:var(--btnfg);padding:8px 12px;margin-right:10px}
+  .tam{width:100%}
+  progress{display:block;width:100%;height:8px;margin-top:12px;border-radius:4px;accent-color:var(--acc)}
+  #durum{margin:0 0 12px;color:var(--warn);min-height:1.3em;text-align:center;font-size:15px;font-weight:600}
+  ul{list-style:none;padding:0;margin:0 0 12px;text-align:left}
+  li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:15px}
+  li button{min-height:36px;padding:6px 12px;font-size:14px}
+  pre{text-align:left;background:var(--field);border-radius:12px;padding:12px;font-size:12px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:0 0 10px}
 </style></head>
 <body>
-  <h1>AirPlay for Android</h1>
-  <div class="pin">PIN: <input type="text" id="pin" inputmode="numeric" maxlength="4" autocomplete="off"></div>
+  <header>
+    <h1>AirPlay for Android</h1>
+    <label class="pin">PIN <input type="text" id="pin" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+  </header>
   <div id="durum" role="status"></div>
 
   <nav class="sekmeler" role="tablist">
@@ -304,23 +318,27 @@ class VideoServer(
 
   <section id="gonder">
     <h2 data-i="h_send"></h2>
-    <input type="file" id="dosya" accept="video/*" multiple><br>
-    <button id="btn" data-i="btn_send"></button>
+    <input type="file" id="dosya" accept="video/*" multiple>
+    <button id="btn" class="tam" data-i="btn_send"></button>
     <progress id="ilerleme" value="0" max="100" hidden></progress>
     <h2 data-i="h_say"></h2>
-    <div><input type="text" id="mesaj" maxlength="200"> <button id="mesajGonder" data-i="btn_say"></button></div>
+    <div class="satir"><input type="text" id="mesaj" maxlength="200"> <button id="mesajGonder" data-i="btn_say"></button></div>
     <h2 data-i="h_remote"></h2>
-    <div>
+    <div class="izgara g2">
+      <button class="genis" data-cmd="playpause" data-i="c_play"></button>
       <button class="gri" data-cmd="back10" data-i="c_back"></button>
-      <button data-cmd="playpause" data-i="c_play"></button>
       <button class="gri" data-cmd="fwd10" data-i="c_fwd"></button>
     </div>
-    <div>
+    <div class="izgara g2">
       <button class="gri" data-cmd="voldown" data-i="c_voldown"></button>
       <button class="gri" data-cmd="volup" data-i="c_volup"></button>
+    </div>
+    <div class="izgara g3">
       <button class="gri" data-cmd="zoomout">🔍−</button>
-      <button class="gri" data-cmd="zoomin">🔍+</button>
       <button class="gri" data-cmd="zoomreset">1×</button>
+      <button class="gri" data-cmd="zoomin">🔍+</button>
+    </div>
+    <div class="izgara g2">
       <button class="gri" data-cmd="next" data-i="c_next"></button>
       <button class="gri" data-cmd="stop" data-i="c_stop"></button>
     </div>
@@ -328,23 +346,23 @@ class VideoServer(
 
   <section id="ayar">
     <h2 data-i="h_name"></h2>
-    <div><input type="text" id="ad" maxlength="32"> <button id="adKaydet" data-i="btn_save"></button></div>
+    <div class="satir"><input type="text" id="ad" maxlength="32"> <button id="adKaydet" data-i="btn_save"></button></div>
     <h2 data-i="h_trusted"></h2>
     <ul id="liste"></ul>
-    <button class="gri" id="hepsiniSil" data-i="btn_clear_all"></button>
+    <button class="gri tam" id="hepsiniSil" data-i="btn_clear_all"></button>
   </section>
 
   <section id="guncelle">
     <h2><span data-i="h_update"></span> <span id="surum"></span></h2>
     <p class="not" data-i="note_update"></p>
-    <input type="file" id="apk" accept=".apk,application/vnd.android.package-archive"><br>
-    <button id="apkGonder" data-i="btn_apk"></button>
+    <input type="file" id="apk" accept=".apk,application/vnd.android.package-archive">
+    <button id="apkGonder" class="tam" data-i="btn_apk"></button>
     <progress id="apkIlerleme" value="0" max="100" hidden></progress>
   </section>
 
   <section id="gunluk">
     <h2 data-i="h_log"></h2>
-    <button class="gri" id="yenile" data-i="btn_refresh"></button>
+    <button class="gri tam" id="yenile" data-i="btn_refresh"></button>
     <pre id="gunlukMetin"></pre>
   </section>
 
@@ -352,7 +370,7 @@ class VideoServer(
 var DIL = {
   tr: {
     tab_send: 'Gönder', tab_settings: 'Ayarlar', tab_update: 'Güncelle', tab_log: 'Günlük',
-    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda', h_say: 'TV'ye mesaj', btn_say: 'Göster',
+    h_send: "TV'ye gönder", btn_send: 'Gönder', h_remote: 'Kumanda', h_say: "TV'ye mesaj", btn_say: 'Göster',
     c_back: '⏪ 10 sn', c_play: '⏯ Oynat / Duraklat', c_fwd: '10 sn ⏩',
     c_voldown: 'Ses −', c_volup: 'Ses +', c_stop: 'Durdur', c_next: 'Sonraki',
     h_name: 'AirPlay sunucu adı', btn_save: 'Kaydet', h_trusted: 'Güvenilen cihazlar', btn_clear_all: 'Hepsini sil',
