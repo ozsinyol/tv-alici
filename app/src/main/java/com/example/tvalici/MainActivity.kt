@@ -687,7 +687,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     /** Yansitma sirasinda SAG/SOL: ses ile goruntu arasindaki kaymayi 20 ms'lik adimlarla ayarlar. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val wasBouncing = bouncing
         userActivity()
+        // Ziplayan QR'i durduran OK tusu ayri bir islem (otomatik baslatma degisimi) tetiklemesin.
+        if (wasBouncing && isOkKey(keyCode)) return true
         if (event.repeatCount == 0) appendLog("Tuş: ${KeyEvent.keyCodeToString(keyCode)}")
         if (mirrorActive && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             // Otomatikteyken ilk basista guncel otomatik degerden elle kipe gecilir.
@@ -701,7 +704,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
             return true
         }
-        if (mirrorActive && isOkKey(keyCode)) {
+        if (mirrorActive && isOkKey(keyCode) && event.repeatCount == 0) {
             SyncSettings.jitterBufferMs = SyncSettings.AUTO
             getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putInt("jitterBufferMs", SyncSettings.AUTO).apply()
             val text = getString(R.string.jitter_auto, SyncSettings.autoJitterMs.toString())
@@ -781,6 +784,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             photoView.visibility = android.view.View.GONE
             if (airplayVideoActive) endAirplayVideo()
             airplayServer?.stopAllMirrors()
+            // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
+            mirrorActive = false
             overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()
