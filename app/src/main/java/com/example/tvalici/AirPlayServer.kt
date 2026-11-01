@@ -270,6 +270,7 @@ class AirPlayServer(
         // /info herkese acik (cihaz listede gorunsun); gerisi icin TV'de izin gerekir.
         val open = uri == "/info" || uri == "/feedback"
         if (!open && !s.authorized) {
+            log("  izin sorgusu: ${method} ${shortUri(uri)} cihaz-kimliği=${headers["x-apple-device-id"] ?: "yok"}")
             if (gate.check(s.socket.inetAddress.hostAddress ?: "")) {
                 s.authorized = true
             } else {
