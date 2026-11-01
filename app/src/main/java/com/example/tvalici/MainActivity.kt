@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -103,6 +106,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private lateinit var infoLabel: TextView
     private var airplayInfoRef: AirPlayInfo? = null
     private var serverUrl = ""
+    private lateinit var qrView: ImageView
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var baseLabel = ""
 
     // Video AirPlay (/play): oynatici durumu ana is parcacigindan guncellenir, sunucu bunu okur.
@@ -182,6 +187,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         serverUrl = url
 
         val qr = ImageView(this).apply { setImageBitmap(qrBitmap("$url/?pin=$pin", 600)) }
+        qrView = qr
         val label = TextView(this).apply {
             text = baseLabelText()
             textSize = 18f
@@ -269,6 +275,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             appendLog("AirPlay başlamadı: ${e.message}")
         }
 
+        watchNetwork()
         appendLog("Sürüm v${BuildConfig.VERSION_CODE}")
         updater.check()
     }
@@ -629,7 +636,41 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
     }
 
+    /** Wi-Fi/DHCP degisince adresi, QR'i ve etiketi tazeler. */
+    private fun watchNetwork() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = refreshAddress()
+            override fun onLinkPropertiesChanged(network: Network, lp: android.net.LinkProperties) = refreshAddress()
+        }
+        try {
+            cm.registerNetworkCallback(NetworkRequest.Builder().build(), cb)
+            netCallback = cb
+        } catch (e: Exception) {
+            appendLog("Ağ izleme başlatılamadı: ${e.message}")
+        }
+    }
+
+    private fun refreshAddress() {
+        val url = try {
+            "http://${localIp()}:$port"
+        } catch (e: Exception) {
+            return
+        }
+        runOnUiThread {
+            if (url == serverUrl || url.startsWith("http://0.0.0.0")) return@runOnUiThread
+            serverUrl = url
+            qrView.setImageBitmap(qrBitmap("$url/?pin=$pin", 600))
+            baseLabel = baseLabelText()
+            updateAutostartHint()
+            appendLog("Adres değişti: $url")
+        }
+    }
+
     override fun onDestroy() {
+        netCallback?.let { cb ->
+            runCatching { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(cb) }
+        }
         mainHandler.removeCallbacksAndMessages(null)
         server?.stop()
         airplayServer?.stop()
@@ -641,7 +682,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun localIp(): String =
         NetworkInterface.getNetworkInterfaces().toList()
             .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+            .filter { !it.isLoopbackAddress && it is Inet4Address }
+            .let { l -> l.firstOrNull { it.isSiteLocalAddress } ?: l.firstOrNull() }
             ?.hostAddress ?: "0.0.0.0"
 
     private fun qrBitmap(text: String, size: Int): Bitmap {
