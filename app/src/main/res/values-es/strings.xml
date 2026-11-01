@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s min</string>
     <string name="sleep_stopped">Temporizador: reproducción detenida</string>
     <string name="menu_exit">Salir de la app</string>
+    <string name="menu_fit">Ajuste de pantalla</string>
+    <string name="fit_contain">Ajustar</string>
+    <string name="fit_fill">Rellenar (recortar)</string>
+    <string name="menu_clock">Reloj</string>
+    <string name="menu_stats">Estadísticas</string>
+    <string name="menu_trusted">Dispositivos de confianza</string>
+    <string name="menu_forget">Quitar</string>
+    <string name="menu_forget_all">Quitar todos</string>
+    <string name="menu_back">Atrás</string>
+    <string name="menu_none">Sin dispositivos de confianza</string>
 </resources>

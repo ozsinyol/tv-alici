@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             logWifi()
             runOnUiThread {
                 syncStreamLocks()
+                updateNowPlaying()
                 player?.stop()
                 airplayVideoActive = false
                 photoView.visibility = android.view.View.GONE
@@ -103,6 +104,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             panY = 0f
             runOnUiThread {
                 syncStreamLocks()
+                updateNowPlaying()
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
         }
@@ -134,6 +136,15 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
     private val hideSay = Runnable { sayView.visibility = android.view.View.GONE }
     private lateinit var trackArt: ImageView
+    private lateinit var clockTime: TextView
+    private lateinit var clockDate: TextView
+    private lateinit var connLabel: TextView
+    private var clockOn = true
+    private var mirrorFill = false
+    private var statsOn = false
+    private var connectedName: String? = null
+    private var connectedIp = ""
+    private var connectedCount = 0
     private lateinit var trackText: TextView
     private lateinit var infoLabel: TextView
     private var airplayInfoRef: AirPlayInfo? = null
@@ -165,6 +176,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        clockOn = getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("clock", true)
+        mirrorFill = getSharedPreferences("airplay", Context.MODE_PRIVATE).getBoolean("mirrorFill", false)
         SyncSettings.offsetMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
             .getInt("syncOffsetMs", 0).coerceIn(-SyncSettings.MAX_MS, SyncSettings.MAX_MS)
         SyncSettings.jitterBufferMs = getSharedPreferences("airplay", Context.MODE_PRIVATE)
@@ -231,6 +244,25 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 0)
         }
+        clockTime = TextView(this).apply {
+            textSize = 56f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        clockDate = TextView(this).apply {
+            textSize = 20f
+            setTextColor(Color.rgb(181, 181, 189))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(16))
+        }
+        connLabel = TextView(this).apply {
+            textSize = 18f
+            setTextColor(Color.rgb(52, 199, 89))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+            visibility = android.view.View.GONE
+        }
         trackArt = ImageView(this).apply { visibility = android.view.View.GONE }
         trackText = TextView(this).apply {
             textSize = 22f
@@ -245,8 +277,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         overlayContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            addView(clockTime, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(clockDate, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(qr, LinearLayout.LayoutParams(380, 380))
             addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(connLabel, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(trackArt, LinearLayout.LayoutParams(260, 260).apply { topMargin = 24 })
             addView(trackText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         }
@@ -288,7 +323,14 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             )
             addView(photoView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(overlayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(nowPlayingView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(sayView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(
+                statsView,
+                FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                    setMargins(dp(12), dp(12), dp(12), dp(12))
+                }
+            )
             addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(rootLayout)
@@ -336,9 +378,21 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     // ---- VideoEvents (iPhone Fotoğraflar > AirPlay > video) -------------------------------
 
-    override fun deviceConnected(name: String?) {
+    override fun deviceConnected(name: String?, ip: String) {
         runOnUiThread {
-            Toast.makeText(this, "👋 " + (name ?: "iPhone"), Toast.LENGTH_LONG).show()
+            connectedCount++
+            connectedName = name ?: "iPhone"
+            connectedIp = ip
+            updateConnLabel()
+            Toast.makeText(this, "👋 " + connectedName, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun deviceDisconnected() {
+        runOnUiThread {
+            connectedCount = maxOf(0, connectedCount - 1)
+            if (connectedCount == 0) connectedName = null
+            updateConnLabel()
         }
     }
 
@@ -348,6 +402,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun audioTrack(info: TrackInfo) {
         lastTrack = info
         runOnUiThread {
+            npDismissed = false
+            updateNowPlaying()
             val text = listOfNotNull(info.title, info.artist, info.album).joinToString("\n")
             trackText.text = text
             trackText.visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
@@ -357,6 +413,8 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     override fun audioArt(image: ByteArray?) {
         val bmp = image?.let { decodeScaled(it) }
         runOnUiThread {
+            lastArt = bmp
+            updateNowPlaying()
             if (bmp == null) {
                 trackArt.setImageDrawable(null)
                 trackArt.visibility = android.view.View.GONE
@@ -379,6 +437,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             audioStreaming = true
             requestAudioFocus()
             syncStreamLocks()
+            updateNowPlaying()
         }
     }
 
@@ -452,8 +511,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         lastTrack = null
         runOnUiThread {
             audioStreaming = false
+            lastArt = null
+            npDismissed = false
             abandonAudioFocus()
             syncStreamLocks()
+            updateNowPlaying()
             trackText.text = ""
             trackText.visibility = android.view.View.GONE
             trackArt.setImageDrawable(null)
@@ -589,7 +651,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val cw = rootLayout.width
         val ch = rootLayout.height
         if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
-        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH) * mirrorZoom
+        val fit = if (mirrorFill) maxOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
+        else minOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
+        val scale = fit * mirrorZoom
         val w = (videoW * scale).toInt().coerceAtLeast(1)
         val h = (videoH * scale).toInt().coerceAtLeast(1)
         val maxPanX = maxOf(0f, (w - cw) / 2f)
@@ -695,10 +759,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         val value: () -> String,
         val left: () -> Unit,
         val right: () -> Unit,
-        val ok: () -> Unit = right
+        val ok: () -> Unit = right,
+        val text: String? = null
     )
 
     private var menuOpen = false
+    private var menuTrusted = false // true: "Guvenilen cihazlar" alt menusu
     private var menuIndex = 0
     private val menuHide = Runnable { closeMenu() }
 
@@ -784,7 +850,52 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         if (sleepDeadline == 0L) getString(R.string.buffer_off)
         else getString(R.string.sleep_min, ((sleepDeadline - SystemClock.elapsedRealtime() + 59_999L) / 60_000L).toString())
 
+    private fun onOff(b: Boolean): String = getString(if (b) R.string.on else R.string.off)
+
+    private fun toggleFill() {
+        mirrorFill = !mirrorFill
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("mirrorFill", mirrorFill).apply()
+        if (lastMirrorW > 0 && lastMirrorH > 0) fitMirror(lastMirrorW, lastMirrorH)
+    }
+
+    private fun toggleClock() {
+        clockOn = !clockOn
+        getSharedPreferences("airplay", Context.MODE_PRIVATE).edit().putBoolean("clock", clockOn).apply()
+        updateClock()
+    }
+
+    private fun menuBack() {
+        if (menuTrusted) {
+            menuTrusted = false
+            menuIndex = 0
+            renderMenu()
+        } else {
+            closeMenu()
+        }
+    }
+
+    /** "Guvenilen cihazlar" alt menusu: OK ile secili cihazin guveni kaldirilir. */
+    private fun trustedItems(): List<MenuItem> {
+        val list = mutableListOf<MenuItem>()
+        val devices = approvals.trustedList()
+        if (devices.isEmpty()) list += MenuItem(R.string.menu_none, { "" }, {}, {}, {})
+        devices.forEach { line ->
+            val ip = line.substringBefore(' ')
+            list += MenuItem(
+                R.string.menu_forget,
+                { getString(R.string.menu_forget) },
+                {}, {},
+                { approvals.forget(ip) },
+                text = ip + if (line.contains("(perm)")) " ★" else ""
+            )
+        }
+        if (devices.size > 1) list += MenuItem(R.string.menu_forget_all, { "" }, {}, {}, { approvals.forgetAll() })
+        list += MenuItem(R.string.menu_back, { "" }, {}, {}, { menuBack() })
+        return list
+    }
+
     private fun menuItems(): List<MenuItem> {
+        if (menuTrusted) return trustedItems()
         val step = SyncSettings.STEP_MS
         val list = mutableListOf<MenuItem>()
         list += MenuItem(
@@ -818,6 +929,22 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 { setMirrorZoom(1f) }
             )
         }
+        list += MenuItem(
+            R.string.menu_fit,
+            { getString(if (mirrorFill) R.string.fit_fill else R.string.fit_contain) },
+            { toggleFill() }, { toggleFill() }
+        )
+        list += MenuItem(R.string.menu_clock, { onOff(clockOn) }, { toggleClock() }, { toggleClock() })
+        list += MenuItem(
+            R.string.menu_stats,
+            { onOff(statsOn) },
+            { statsOn = !statsOn; updateStats() }, { statsOn = !statsOn; updateStats() }
+        )
+        list += MenuItem(
+            R.string.menu_trusted,
+            { "›" },
+            {}, { menuTrusted = true; menuIndex = 0 }
+        )
         list += MenuItem(
             R.string.menu_update,
             { "v${BuildConfig.VERSION_CODE}" },
@@ -862,7 +989,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 }
             }
             row.addView(TextView(this).apply {
-                text = getString(item.label)
+                text = item.text ?: getString(item.label)
                 textSize = 20f
                 setTextColor(Color.WHITE)
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
@@ -891,6 +1018,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private fun openMenu() {
         if (menuOpen) return
         menuOpen = true
+        menuTrusted = false
         menuIndex = 0
         renderMenu()
         menuLayer.visibility = android.view.View.VISIBLE
@@ -899,6 +1027,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     private fun closeMenu() {
         menuOpen = false
+        menuTrusted = false
         mainHandler.removeCallbacks(menuHide)
         menuLayer.visibility = android.view.View.GONE
     }
@@ -913,7 +1042,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> items[menuIndex.coerceIn(0, items.size - 1)].left()
             keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> items[menuIndex.coerceIn(0, items.size - 1)].right()
             isOkKey(keyCode) -> if (event.repeatCount == 0) items[menuIndex.coerceIn(0, items.size - 1)].ok()
-            keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_MENU -> if (event.repeatCount == 0) closeMenu()
+            keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_MENU -> if (event.repeatCount == 0) menuBack()
             else -> return false
         }
         if (menuOpen) renderMenu()
@@ -1006,6 +1135,84 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         return super.dispatchTouchEvent(ev)
     }
 
+    // ---- "Simdi caliyor": muzikte tam ekran kapak + sarki bilgisi (Geri tusu QR ekranina doner) ----
+
+    private var npDismissed = false
+    private var lastArt: Bitmap? = null
+    private val npBackdrop: ImageView by lazy { ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_XY; alpha = 0.55f } }
+    private val npArt: ImageView by lazy { ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP } }
+    private val npTitle: TextView by lazy {
+        TextView(this).apply {
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            maxLines = 2
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(24), dp(24), dp(24), 0)
+        }
+    }
+    private val npArtist: TextView by lazy {
+        TextView(this).apply {
+            textSize = 24f
+            setTextColor(Color.rgb(209, 209, 214))
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(24), dp(6), dp(24), 0)
+        }
+    }
+    private val npAlbum: TextView by lazy {
+        TextView(this).apply {
+            textSize = 18f
+            setTextColor(Color.rgb(181, 181, 189))
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(24), dp(4), dp(24), 0)
+        }
+    }
+    private val nowPlayingView: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            visibility = android.view.View.GONE
+            addView(npBackdrop, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(
+                LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    addView(npArt, LinearLayout.LayoutParams(dp(240), dp(240)))
+                    addView(npTitle, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                    addView(npArtist, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                    addView(npAlbum, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                },
+                FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            )
+        }
+    }
+
+    private fun updateNowPlaying() {
+        val t = lastTrack
+        val art = lastArt
+        val show = audioStreaming && !mirrorActive && !airplayVideoActive && !npDismissed && (t != null || art != null)
+        if (!show) {
+            nowPlayingView.visibility = android.view.View.GONE
+            return
+        }
+        npTitle.text = t?.title ?: ""
+        npArtist.text = t?.artist ?: ""
+        npAlbum.text = t?.album ?: ""
+        if (art != null) {
+            val side = (minOf(rootLayout.width, rootLayout.height) * 0.5f).toInt().coerceAtLeast(dp(120))
+            npArt.layoutParams = LinearLayout.LayoutParams(side, side)
+            npArt.setImageBitmap(art)
+            npArt.visibility = android.view.View.VISIBLE
+            // Kucuk bir kopyayi buyutmek, ucuz bir bulaniklastirma (arka plan) verir.
+            npBackdrop.setImageBitmap(Bitmap.createScaledBitmap(art, 16, 16, true))
+        } else {
+            npArt.visibility = android.view.View.GONE
+            npBackdrop.setImageDrawable(null)
+        }
+        nowPlayingView.visibility = android.view.View.VISIBLE
+    }
+
     // ---- /api/status: web kumandasinin "su an oynuyor" bilgisi (saniyede bir, ana is parcacigindan) ----
 
     @Volatile
@@ -1015,10 +1222,90 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         override fun run() {
             try {
                 statusJson = buildStatus()
+                updateClock()
+                updateStats()
             } catch (e: Exception) {
                 // bir sonraki turda yeniden denenir
             }
             mainHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun updateClock() {
+        val vis = if (clockOn) android.view.View.VISIBLE else android.view.View.GONE
+        clockTime.visibility = vis
+        clockDate.visibility = vis
+        if (!clockOn) return
+        val now = java.util.Date()
+        clockTime.text = android.text.format.DateFormat.getTimeFormat(this).format(now)
+        clockDate.text = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
+    }
+
+    private val statsView: TextView by lazy {
+        TextView(this).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            visibility = android.view.View.GONE
+        }
+    }
+    private var lastStatsFrames = 0L
+    private var lastStatsAt = 0L
+
+    private fun wifiSummary(): String = try {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+        @Suppress("DEPRECATION")
+        val i = wm?.connectionInfo
+        if (i == null || i.rssi <= -127) "-" else {
+            val f = i.frequency
+            val band = when {
+                f >= 5925 -> "6 GHz"
+                f >= 4900 -> "5 GHz"
+                f > 0 -> "2.4 GHz"
+                else -> "?"
+            }
+            "$band ${i.rssi} dBm ${i.linkSpeed} Mbps"
+        }
+    } catch (e: Exception) {
+        "-"
+    }
+
+    /** Menudeki "Istatistikler" acikken sag ustte teknik bilgi paneli (saniyede bir). Tanilama metni dilden bagimsizdir. */
+    private fun updateStats() {
+        if (!statsOn) {
+            statsView.visibility = android.view.View.GONE
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val fps = if (lastStatsAt > 0 && now > lastStatsAt) (MirrorStats.frames - lastStatsFrames) * 1000.0 / (now - lastStatsAt) else 0.0
+        lastStatsFrames = MirrorStats.frames
+        lastStatsAt = now
+        val sb = StringBuilder()
+        if (mirrorActive && lastMirrorW > 0) {
+            sb.append("Mirror   ${lastMirrorW}x$lastMirrorH @ ${"%.0f".format(java.util.Locale.US, maxOf(0.0, fps))} fps\n")
+        } else {
+            sb.append("Mirror   -\n")
+        }
+        sb.append("Buffer   ").append(
+            if (SyncSettings.jitterBufferMs == SyncSettings.AUTO) "auto ${SyncSettings.autoJitterMs} ms" else "${SyncSettings.jitterBufferMs} ms"
+        ).append('\n')
+        sb.append("Dropped  ${MirrorStats.dropped}\n")
+        sb.append("A/V sync ${SyncSettings.offsetMs} ms\n")
+        sb.append("Wi-Fi    ${wifiSummary()}")
+        connectedName?.let { sb.append("\nDevice   ").append(it).append(if (connectedIp.isNotEmpty()) " ($connectedIp)" else "") }
+        statsView.text = sb.toString()
+        statsView.visibility = android.view.View.VISIBLE
+    }
+
+    private fun updateConnLabel() {
+        val n = connectedName
+        if (n == null || connectedCount <= 0) {
+            connLabel.visibility = android.view.View.GONE
+        } else {
+            connLabel.text = "● $n" + (if (connectedIp.isNotEmpty()) " · $connectedIp" else "")
+            connLabel.visibility = android.view.View.VISIBLE
         }
     }
 
@@ -1048,6 +1335,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         }
         o.put("vol", audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max)
         o.put("name", serverName())
+        connectedName?.let { o.put("device", it) }
         val q = org.json.JSONArray()
         uploadQueue.toList().forEach { q.put(it.name.ifEmpty { "video" }) }
         o.put("queue", q)
@@ -1266,8 +1554,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
         panX = 0f
         panY = 0f
         audioStreaming = false
+        lastTrack = null
+        lastArt = null
+        npDismissed = false
         abandonAudioFocus()
         syncStreamLocks()
+        updateNowPlaying()
         overlayView.visibility = android.view.View.VISIBLE
     }
 
@@ -1275,7 +1567,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (menuOpen) {
-            closeMenu()
+            menuBack()
+            return
+        }
+        if (nowPlayingView.visibility == android.view.View.VISIBLE) {
+            npDismissed = true
+            updateNowPlaying()
             return
         }
         if (overlayView.visibility == android.view.View.GONE) {

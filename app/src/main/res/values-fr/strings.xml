@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s min</string>
     <string name="sleep_stopped">Minuterie : lecture arrêtée</string>
     <string name="menu_exit">Quitter l\'application</string>
+    <string name="menu_fit">Ajustement de l\'écran</string>
+    <string name="fit_contain">Adapter</string>
+    <string name="fit_fill">Remplir (rogner)</string>
+    <string name="menu_clock">Horloge</string>
+    <string name="menu_stats">Statistiques</string>
+    <string name="menu_trusted">Appareils de confiance</string>
+    <string name="menu_forget">Retirer</string>
+    <string name="menu_forget_all">Tout retirer</string>
+    <string name="menu_back">Retour</string>
+    <string name="menu_none">Aucun appareil de confiance</string>
 </resources>

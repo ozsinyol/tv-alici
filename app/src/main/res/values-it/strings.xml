@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s min</string>
     <string name="sleep_stopped">Timer: riproduzione interrotta</string>
     <string name="menu_exit">Esci dall\'app</string>
+    <string name="menu_fit">Adattamento schermo</string>
+    <string name="fit_contain">Adatta</string>
+    <string name="fit_fill">Riempi (ritaglia)</string>
+    <string name="menu_clock">Orologio</string>
+    <string name="menu_stats">Statistiche</string>
+    <string name="menu_trusted">Dispositivi attendibili</string>
+    <string name="menu_forget">Rimuovi</string>
+    <string name="menu_forget_all">Rimuovi tutti</string>
+    <string name="menu_back">Indietro</string>
+    <string name="menu_none">Nessun dispositivo attendibile</string>
 </resources>

@@ -214,6 +214,7 @@ class MirrorDecoder(
             if (tryFeed(data, len, arrivedNs)) return
             if (System.nanoTime() > deadline) {
                 dropped++
+                MirrorStats.dropped = dropped.toLong()
                 log("Kare atlandı (toplam $dropped)")
                 return
             }

@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s Min.</string>
     <string name="sleep_stopped">Schlaftimer: Wiedergabe gestoppt</string>
     <string name="menu_exit">App beenden</string>
+    <string name="menu_fit">Bildanpassung</string>
+    <string name="fit_contain">Einpassen</string>
+    <string name="fit_fill">Füllen (zuschneiden)</string>
+    <string name="menu_clock">Uhr</string>
+    <string name="menu_stats">Statistik</string>
+    <string name="menu_trusted">Vertrauenswürdige Geräte</string>
+    <string name="menu_forget">Entfernen</string>
+    <string name="menu_forget_all">Alle entfernen</string>
+    <string name="menu_back">Zurück</string>
+    <string name="menu_none">Keine vertrauenswürdigen Geräte</string>
 </resources>

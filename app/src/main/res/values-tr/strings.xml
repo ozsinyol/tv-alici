@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s dk</string>
     <string name="sleep_stopped">Uyku zamanlayıcısı: oynatma durduruldu</string>
     <string name="menu_exit">Uygulamadan çık</string>
+    <string name="menu_fit">Ekrana sığdırma</string>
+    <string name="fit_contain">Sığdır</string>
+    <string name="fit_fill">Doldur (kırp)</string>
+    <string name="menu_clock">Saat</string>
+    <string name="menu_stats">İstatistikler</string>
+    <string name="menu_trusted">Güvenilen cihazlar</string>
+    <string name="menu_forget">Sil</string>
+    <string name="menu_forget_all">Hepsini sil</string>
+    <string name="menu_back">Geri</string>
+    <string name="menu_none">Güvenilen cihaz yok</string>
 </resources>

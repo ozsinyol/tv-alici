@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s 分钟</string>
     <string name="sleep_stopped">睡眠定时器：已停止播放</string>
     <string name="menu_exit">退出应用</string>
+    <string name="menu_fit">画面适配</string>
+    <string name="fit_contain">适应</string>
+    <string name="fit_fill">填充（裁剪）</string>
+    <string name="menu_clock">时钟</string>
+    <string name="menu_stats">统计</string>
+    <string name="menu_trusted">受信任的设备</string>
+    <string name="menu_forget">移除</string>
+    <string name="menu_forget_all">全部移除</string>
+    <string name="menu_back">返回</string>
+    <string name="menu_none">没有受信任的设备</string>
 </resources>

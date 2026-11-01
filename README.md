@@ -87,9 +87,15 @@ QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna
 | Ses/görüntü kayması | SOL/SAĞ ±20 ms, OK sıfırlar |
 | Görüntü tamponu | SOL/SAĞ ±20 ms (0 = kapalı), OK otomatiğe döner |
 | Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
+| Ekrana sığdırma | SOL/SAĞ/OK: Sığdır ↔ Doldur (kırparak); yansıtırken ve kayıtlı |
+| Saat | SOL/SAĞ/OK: QR ekranındaki saat ve tarih açık/kapalı |
+| İstatistikler | SOL/SAĞ/OK: sağ üstte çözünürlük, kare hızı, tampon, atlanan kare, Wi-Fi sinyali ve bağlı cihaz paneli |
+| Güvenilen cihazlar | SAĞ/OK alt menüyü açar; satırda OK o cihazın güvenini kaldırır (★ kalıcı), Geri ile dönülür |
 | Güncellemeyi kontrol et (kurulu sürüm yazar) | OK: GitHub'daki son sürümü sorar, sonucu ekranda gösterir |
 | Uygulamadan çık | OK (ön plan servisi ve sunucular da durur) |
 | Kapat | OK |
+
+QR ekranında bağlı iPhone'un adı ve IP'si yeşil bir satırla görünür. Müzik çalarken (kapak ve şarkı bilgisi gelince) tam ekran **"Şimdi çalıyor"** ekranı açılır: büyük kapak, bulanık arka plan, şarkı/sanatçı/albüm; **Geri** tuşu QR ekranına döndürür, sonraki şarkıda yeniden açılır. QR ekranı bekleme saatini de gösterir.
 
 Gezinme YUKARI/AŞAĞI ile yapılır. Dokunmatik ekranda satıra dokunmak "OK/artır", uzun basmak "azalt" işi görür. Menü kapalıyken yansıtma sırasındaki eski kısayollar sürer: SAĞ/SOL ses-görüntü kayması, YUKARI/AŞAĞI görüntü tamponu.
 

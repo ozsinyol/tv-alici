@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s 分</string>
     <string name="sleep_stopped">スリープタイマー：再生を停止しました</string>
     <string name="menu_exit">アプリを終了</string>
+    <string name="menu_fit">画面サイズ</string>
+    <string name="fit_contain">全体表示</string>
+    <string name="fit_fill">全画面 (切り取り)</string>
+    <string name="menu_clock">時計</string>
+    <string name="menu_stats">統計</string>
+    <string name="menu_trusted">信頼済みデバイス</string>
+    <string name="menu_forget">削除</string>
+    <string name="menu_forget_all">すべて削除</string>
+    <string name="menu_back">戻る</string>
+    <string name="menu_none">信頼済みデバイスはありません</string>
 </resources>

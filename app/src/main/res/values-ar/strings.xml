@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s د</string>
     <string name="sleep_stopped">مؤقت النوم: تم إيقاف التشغيل</string>
     <string name="menu_exit">إغلاق التطبيق</string>
+    <string name="menu_fit">ملاءمة الشاشة</string>
+    <string name="fit_contain">ملاءمة</string>
+    <string name="fit_fill">ملء (اقتصاص)</string>
+    <string name="menu_clock">الساعة</string>
+    <string name="menu_stats">الإحصائيات</string>
+    <string name="menu_trusted">الأجهزة الموثوقة</string>
+    <string name="menu_forget">إزالة</string>
+    <string name="menu_forget_all">إزالة الكل</string>
+    <string name="menu_back">رجوع</string>
+    <string name="menu_none">لا توجد أجهزة موثوقة</string>
 </resources>

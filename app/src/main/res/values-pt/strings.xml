@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s min</string>
     <string name="sleep_stopped">Temporizador: reprodução interrompida</string>
     <string name="menu_exit">Sair do app</string>
+    <string name="menu_fit">Ajuste de tela</string>
+    <string name="fit_contain">Ajustar</string>
+    <string name="fit_fill">Preencher (cortar)</string>
+    <string name="menu_clock">Relógio</string>
+    <string name="menu_stats">Estatísticas</string>
+    <string name="menu_trusted">Dispositivos confiáveis</string>
+    <string name="menu_forget">Remover</string>
+    <string name="menu_forget_all">Remover todos</string>
+    <string name="menu_back">Voltar</string>
+    <string name="menu_none">Nenhum dispositivo confiável</string>
 </resources>

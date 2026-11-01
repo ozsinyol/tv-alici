@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s мин</string>
     <string name="sleep_stopped">Таймер сна: воспроизведение остановлено</string>
     <string name="menu_exit">Выйти из приложения</string>
+    <string name="menu_fit">Размер изображения</string>
+    <string name="fit_contain">Вписать</string>
+    <string name="fit_fill">Заполнить (обрезать)</string>
+    <string name="menu_clock">Часы</string>
+    <string name="menu_stats">Статистика</string>
+    <string name="menu_trusted">Доверенные устройства</string>
+    <string name="menu_forget">Удалить</string>
+    <string name="menu_forget_all">Удалить все</string>
+    <string name="menu_back">Назад</string>
+    <string name="menu_none">Нет доверенных устройств</string>
 </resources>

@@ -53,4 +53,14 @@
     <string name="sleep_min">%1$s min</string>
     <string name="sleep_stopped">Sleep timer: playback stopped</string>
     <string name="menu_exit">Quit app</string>
+    <string name="menu_fit">Screen fit</string>
+    <string name="fit_contain">Fit</string>
+    <string name="fit_fill">Fill (crop)</string>
+    <string name="menu_clock">Clock</string>
+    <string name="menu_stats">Statistics</string>
+    <string name="menu_trusted">Trusted devices</string>
+    <string name="menu_forget">Remove</string>
+    <string name="menu_forget_all">Remove all</string>
+    <string name="menu_back">Back</string>
+    <string name="menu_none">No trusted devices</string>
 </resources>
