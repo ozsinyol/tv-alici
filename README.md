@@ -60,6 +60,10 @@ Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep iz
 
 Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
 
+## Yansıtmada yakınlaştırma
+
+Ekran yansıtırken görüntü varsayılan olarak ekrana sığdırılır (kenarlarda siyah boşluk kalabilir). Dokunmatik ekranda iki parmakla sıkıştırarak 4 katına kadar yakınlaştırabilir, yakınlaşınca tek parmakla kaydırabilirsiniz. Dokunmatik olmayan cihazlarda web sayfasının Gönder sekmesindeki **🔍+ / 🔍− / 1×** düğmeleri aynı işi yapar (merkeze doğru yakınlaştırır). Yansıtma bitince ya da yeniden başlayınca yakınlaştırma sıfırlanır.
+
 ## Bağlanan cihaza selam
 
 Bir iPhone ya da iPad ekran yansıtma/ses için bağlanınca TV'de kısa bir 👋 bildirimi cihazın adıyla görünür (ad gelmezse "iPhone").

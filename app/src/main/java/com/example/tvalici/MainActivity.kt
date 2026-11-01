@@ -72,6 +72,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
         override fun mirrorStarted() {
             mirrorActive = true
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             logWifi()
             runOnUiThread {
                 player?.stop()
@@ -89,6 +92,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             mirrorActive = false
             lastMirrorW = 0
             lastMirrorH = 0
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             runOnUiThread {
                 if (!airplayVideoActive) overlayView.visibility = android.view.View.VISIBLE
             }
@@ -472,19 +478,74 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     private var lastMirrorW = 0
     private var lastMirrorH = 0
 
+    // Yansitma yakinlastirma: 1x = ekrana sigdir; buyudukce goruntu ekrandan tasar ve kaydirilabilir.
+    private var mirrorZoom = 1f
+    private var panX = 0f
+    private var panY = 0f
+
     private fun fitMirror(videoW: Int, videoH: Int) {
         lastMirrorW = videoW
         lastMirrorH = videoH
         val cw = rootLayout.width
         val ch = rootLayout.height
         if (cw <= 0 || ch <= 0 || videoW <= 0 || videoH <= 0) return
-        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH)
-        val lp = FrameLayout.LayoutParams(
-            (videoW * scale).toInt().coerceAtLeast(1),
-            (videoH * scale).toInt().coerceAtLeast(1),
-            Gravity.CENTER
-        )
+        val scale = minOf(cw.toFloat() / videoW, ch.toFloat() / videoH) * mirrorZoom
+        val w = (videoW * scale).toInt().coerceAtLeast(1)
+        val h = (videoH * scale).toInt().coerceAtLeast(1)
+        val maxPanX = maxOf(0f, (w - cw) / 2f)
+        val maxPanY = maxOf(0f, (h - ch) / 2f)
+        panX = panX.coerceIn(-maxPanX, maxPanX)
+        panY = panY.coerceIn(-maxPanY, maxPanY)
+        val lp = FrameLayout.LayoutParams(w, h, Gravity.TOP or Gravity.START)
+        lp.leftMargin = ((cw - w) / 2f + panX).toInt()
+        lp.topMargin = ((ch - h) / 2f + panY).toInt()
         mirrorView.layoutParams = lp
+    }
+
+    private fun setMirrorZoom(z: Float) {
+        mirrorZoom = z.coerceIn(1f, 4f)
+        if (mirrorZoom == 1f) {
+            panX = 0f
+            panY = 0f
+        }
+        if (lastMirrorW > 0 && lastMirrorH > 0) fitMirror(lastMirrorW, lastMirrorH)
+    }
+
+    private val scaleDetector by lazy {
+        android.view.ScaleGestureDetector(this, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                setMirrorZoom(mirrorZoom * detector.scaleFactor)
+                return true
+            }
+        })
+    }
+    private var touchX = 0f
+    private var touchY = 0f
+
+    /** Yansitma sirasinda iki parmakla yakinlastirma, yakinlasinca tek parmakla kaydirma. */
+    private fun mirrorTouch(ev: MotionEvent) {
+        scaleDetector.onTouchEvent(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchX = ev.x
+                touchY = ev.y
+            }
+            MotionEvent.ACTION_MOVE -> if (ev.pointerCount == 1 && mirrorZoom > 1f) {
+                panX += ev.x - touchX
+                panY += ev.y - touchY
+                touchX = ev.x
+                touchY = ev.y
+                fitMirror(lastMirrorW, lastMirrorH)
+            }
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
+                // Parmak kalkinca kalan parmagin konumundan devam et (ani siçrama olmasin).
+                val i = if (ev.actionIndex == 0) 1 else 0
+                if (ev.pointerCount > 1) {
+                    touchX = ev.getX(i)
+                    touchY = ev.getY(i)
+                }
+            }
+        }
     }
 
     /** Gunluk yalnizca bellekte tutulur; /log sayfasindan okunur, TV ekraninda gosterilmez. */
@@ -609,6 +670,7 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         userActivity()
+        if (mirrorActive && lastMirrorW > 0) mirrorTouch(ev)
         return super.dispatchTouchEvent(ev)
     }
 
@@ -670,6 +732,9 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             "voldown" -> audio.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI
             )
+            "zoomin" -> setMirrorZoom(mirrorZoom * 1.25f)
+            "zoomout" -> setMirrorZoom(mirrorZoom / 1.25f)
+            "zoomreset" -> setMirrorZoom(1f)
             "next" -> if (!playNext()) {
                 p.stop()
                 overlayView.visibility = android.view.View.VISIBLE
@@ -813,6 +878,11 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             airplayServer?.stopAllMirrors()
             // stopAllMirrors mirrorStopped() cagirmaz; bayrak sifirlanmazsa QR ekraninda OK jitter ayarini degistirir.
             mirrorActive = false
+            lastMirrorW = 0
+            lastMirrorH = 0
+            mirrorZoom = 1f
+            panX = 0f
+            panY = 0f
             overlayView.visibility = android.view.View.VISIBLE
         } else {
             super.onBackPressed()

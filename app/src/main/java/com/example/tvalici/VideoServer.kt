@@ -12,7 +12,7 @@ import java.security.MessageDigest
  * PUT  /upload            -> videoyu akis halinde alir; yukleme bitmeden oynatma baslar
  * PUT  /update-apk        -> uygulamanin yeni APK'sini alir; dogrulanirsa TV'de kurulum ekrani acilir
  * GET  /api/version       -> kurulu surum (v<numara>)
- * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop, next)
+ * POST /control?cmd=..    -> oynatma kumandasi (playpause, back10, fwd10, volup, voldown, stop, next, zoomin, zoomout, zoomreset)
  * PUT  /upload + X-Queue: 1 -> video oynatma sirasinin sonuna eklenir (bitince siradaki oynar)
  * POST /api/say?text=..  -> TV ekraninda buyuk mesaj gosterir (bos metin kaldirir)
  * GET  /api/name          -> AirPlay'de gorunen sunucu adi;  POST /api/name?set=AD -> degistirir
@@ -318,6 +318,9 @@ class VideoServer(
     <div>
       <button class="gri" data-cmd="voldown" data-i="c_voldown"></button>
       <button class="gri" data-cmd="volup" data-i="c_volup"></button>
+      <button class="gri" data-cmd="zoomout">🔍−</button>
+      <button class="gri" data-cmd="zoomin">🔍+</button>
+      <button class="gri" data-cmd="zoomreset">1×</button>
       <button class="gri" data-cmd="next" data-i="c_next"></button>
       <button class="gri" data-cmd="stop" data-i="c_stop"></button>
     </div>
