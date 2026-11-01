@@ -1,153 +1,151 @@
 # AirPlay for Android
 
-Android cihazı (Android TV, telefon, tablet, Android kutu/ekran) iPhone'lar için bir **AirPlay sunucusu** yapan uygulama: iPhone'dan ekran yansıtma, video, fotoğraf ve (Safari'den, uygulama kurmadan) video yükleme.
+🌐 [Türkçe](README.tr.md) · **English** · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
-Uygulama açılınca QR kod gösterir. iPhone ile okutulur, açılan sayfadan video seçilir, cihazda oynar. Ayrıca ağda "TV Alici" adıyla bir AirPlay sunucusu olarak görünür; iPhone'un Denetim Merkezi ve AirPlay listesinde bu adla seçilir.
+Turns an Android device (Android TV, phone, tablet, set-top box, smart display) into an **AirPlay receiver** for iPhones and iPads: screen mirroring, video, photos, audio-only streaming (Music, Spotify, …) and video upload from Safari without installing anything.
 
-> Bu belgede geçen "TV", uygulamanın kurulu olduğu Android cihaz anlamına da gelir; telefon ve tablette de aynı şekilde çalışır. Kumanda tuşlarıyla yapılan ayarlar için bkz. [Android telefon/tablette kullanım](#android-telefontablette-kullanım).
+When it starts, the app shows a QR code. Scan it with the iPhone camera, pick a video on the page that opens, and it plays on the device. The device also appears on the network as an AirPlay receiver named "TV Alici"; choose it in Control Center > Screen Mirroring or in any AirPlay list.
 
-## Diller
+> "TV" in this document also means the Android device the app is installed on; everything works the same way on phones and tablets. For on-screen settings with the remote or touch, see [Android phones and tablets](#android-phones-and-tablets) and [TV menu](#tv-menu).
 
-Uygulama arayüzü ve web sayfası (8080) cihaz/tarayıcı diline uyar: **İngilizce** (varsayılan), **Türkçe**, İspanyolca, Fransızca, Almanca, Portekizce, İtalyanca, Rusça, Japonca, Korece, Çince (Basitleştirilmiş) ve Arapça (sağdan sola). English summary: [README.en.md](README.en.md). Yeni dil eklemek için `app/src/main/res/values-<kod>/strings.xml` oluşturun ve `VideoServer.kt` içindeki `DIL` tablosuna bir blok ekleyin. Geliştirici günlüğü Türkçe kalır.
+## Languages
 
-## APK'yı GitHub Actions ile derleme
+The app UI and the web page (port 8080) follow the device/browser language: **English** (default), **Turkish**, Spanish, French, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese (Simplified) and Arabic (right-to-left); other languages fall back to English. This document is the main (English) documentation; the language links at the top lead to the complete Turkish documentation ([README.tr.md](README.tr.md)) and short summaries in the other languages.
 
-1. Bu klasörü bir GitHub deposuna yükleyin (`main` dalı).
-2. Depoda **Actions** sekmesi > **Build APK** iş akışı otomatik çalışır (ya da **Run workflow** ile elle başlatın).
-3. İş bitince çalıştırmanın sayfasında **Artifacts** altından `tv-alici-debug-apk` dosyasını indirin.
+To add a language to the app, create `app/src/main/res/values-<code>/strings.xml` (copy `values/strings.xml`) and add a block for it in the `DIL` table in `VideoServer.kt`. The developer log stays in Turkish.
 
-## Cihaza kurma
+## Building the APK with GitHub Actions
 
-- **Android TV:** geliştirici seçeneklerini ve USB/ağ hata ayıklamayı açın, ardından:
-  `adb connect <tv-ip>` ve `adb install app-debug.apk`. Ya da APK'yı USB belleğe koyup TV'deki bir dosya yöneticisiyle kurun.
-- **Android telefon/tablet:** APK'yı [Releases](https://github.com/ozsinyol/tv-alici/releases) sayfasından cihazda indirip açın (gerekirse "bilinmeyen kaynaklardan yükleme" iznini verin) ya da `adb install` kullanın. Uygulama simgesi başlatıcıda görünür.
+1. Upload this folder to a GitHub repository (`main` branch).
+2. In the repository, the **Actions** tab > **Build APK** workflow runs automatically (or start it with **Run workflow**).
+3. When it finishes, download `tv-alici-debug-apk` under **Artifacts** on the run's page.
 
-iPhone ve Android cihaz aynı Wi-Fi ağında olmalı.
+Pushes to `main` additionally publish a signed APK as a GitHub Release (see [Signing and update security](#signing-and-update-security)).
 
-## Android telefon/tablette kullanım
+## Installing on a device
 
-Uygulama Android TV'de ve diğer Android cihazlarda aynı şekilde çalışır: QR ekranı, AirPlay sunucusu, bağlantı izni penceresi (dokunmayla seçilir), video, fotoğraf ve ekran yansıtma. Aşağıdaki kumanda tuşu ayarları (ses/görüntü kaydırma, görüntü tamponu, otomatik başlatma) yön/OK/MENU tuşlarıyla açılan **TV menüsünden** yapılır; menü satırlarına dokunarak da ayar yapılabilir (dokununca artır/seç, uzun basınca azalt). Telefon/tablette cihazın kendi ekranı ve hoparlörü kullanılır, ekran yansıtma sırasında ekran kapanmaz.
+- **Android TV:** enable Developer options and USB/network debugging, then run `adb connect <tv-ip>` and `adb install app-debug.apk`. Alternatively, put the APK on a USB drive and install it with a file manager on the TV.
+- **Android phone/tablet:** download the APK from the [Releases](https://github.com/ozsinyol/tv-alici/releases) page on the device and open it (grant the "install unknown apps" permission if asked), or use `adb install`. The app icon appears in the launcher.
 
-## İmza ve güncelleme güvenliği
+The iPhone and the Android device must be on the same Wi-Fi network.
 
-APK, yalnızca GitHub Secrets'ta duran özel bir anahtarla imzalanır (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); anahtar depoda yoktur. Anahtar yoksa workflow release yayınlamaz. Uygulama içi güncelleme, indirilen APK'nın paket adını, sürüm numarasını ve imza sertifikasının SHA-256 parmak izini (`app/build.gradle.kts` içindeki `UPDATE_CERT_SHA256`) kurmadan önce kontrol eder; uyuşmazsa APK silinir. Anahtar değiştirilirse bu parmak izi de güncellenmeli ve TV'deki uygulama bir kez silinip elle kurulmalıdır. Yerel (anahtarsız) derlemeler güncelleme doğrulamasından geçmez.
+## Android phones and tablets
 
-## Ekran yansıtma (AirPlay) ve lisans
+The app works the same way on Android TV and other Android devices: QR screen, AirPlay receiver, connection approval dialog (selected by touch), video, photos and screen mirroring. Remote-control settings (audio/video sync, video buffer, auto-start) are made in the **TV menu** opened with the direction/OK/MENU keys; you can also tap the menu rows (tap = increase/select, long-press = decrease). On a phone or tablet the device's own screen and speaker are used, and the screen stays on during mirroring.
 
-Android cihaz, ağda "TV Alici" adıyla bir AirPlay sunucusu olarak görünür; iPhone'un Denetim Merkezi'nden **Ekran Yansıtma** ile bağlanılır. Görüntü (H.264) ve ses (AAC-ELD) desteklenir. Yalnızca ses (Müzik, Spotify vb.) için bkz. [Ses AirPlay](#ses-airplay-müzik-vb). Ses ile görüntü arasındaki kayma elle ayarlanır (aşağıya bakın).
+## Signing and update security
 
-Bu özellik, FairPlay yayın anahtarını çözmek için [UxPlay](https://github.com/FDH2/UxPlay) projesindeki `playfair` kodunu (`app/src/main/cpp/playfair`, GNU GPL v3) ve aynı projenin `fairplay_playfair.c` dosyasındaki yanıt tablolarını (LGPL 2.1+, `AirPlayFairPlay.kt`) kullanır. Bu nedenle **bu depo GNU GPL v3 ile lisanslıdır** (bkz. `LICENSE`).
+The APK is signed only with a private key stored in GitHub Secrets (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`); the key is not in the repository. Without the key, the workflow does not publish a release. Before installing, the in-app updater checks the downloaded APK's package name, version number and the SHA-256 fingerprint of the signing certificate (`UPDATE_CERT_SHA256` in `app/build.gradle.kts`); if anything does not match, the APK is deleted. If the key is changed, this fingerprint must be updated too, and the app on the TV must be uninstalled once and installed manually. Local (unsigned) builds do not pass update verification.
 
-## Ses AirPlay (Müzik vb.)
+## Screen mirroring (AirPlay) and license
 
-iPhone'da Müzik, Spotify, Podcasts gibi uygulamalarda AirPlay simgesinden "TV Alici"yı seçince yalnızca ses TV'ye gelir (ALAC, 44100 Hz, 16 bit, stereo). Ses, `app/src/main/cpp/alac` altındaki Apple'ın açık kaynak ALAC çözücüsüyle (Apache 2.0) çözülür ve yaklaşık 600 ms'lik bir tamponla çalınır; müzikte gecikme önemli olmadığı için Wi-Fi titremesi bu tamponla gizlenir. iPhone'dan ses seviyesi, duraklatma ve sarma (FLUSH) komutları desteklenir. Ekranda şarkı bilgisi ya da kapak resmi gösterilmez; kayıp paket yeniden istenmez (çok zayıf Wi-Fi'de ara sıra çıtırtı olabilir).
+The Android device appears on the network as an AirPlay receiver named "TV Alici"; connect to it from the iPhone's Control Center with **Screen Mirroring**. Video (H.264) and audio (AAC-ELD) are supported. For audio only (Music, Spotify, …) see [Audio AirPlay](#audio-airplay-music-etc). The offset between audio and video is adjusted by hand (see below).
 
-## Ses/görüntü senkronu
+To decrypt the FairPlay stream key, this feature uses the `playfair` code from the [UxPlay](https://github.com/FDH2/UxPlay) project (`app/src/main/cpp/playfair`, GNU GPL v3) and the response tables in the same project's `fairplay_playfair.c` (LGPL 2.1+, `AirPlayFairPlay.kt`). For this reason **this repository is licensed under the GNU GPL v3** (see `LICENSE`). The ALAC audio decoder under `app/src/main/cpp/alac` is Apple's open-source code under the Apple Public Source License 2.0 (`app/src/main/cpp/alac/APPLE_LICENSE.txt`).
 
-Ekran yansıtırken ses görüntüyle kayık geliyorsa TV kumandasında **SAĞ/SOL** tuşlarına basın (her basış 20 ms, en çok ±500 ms). Ses görüntüden **geç** geliyorsa SAĞ (görüntü geciktirilir), **erken** geliyorsa SOL (ses geciktirilir). Ayar kaydedilir; ekranda kısa bir bilgi çıkar ve günlüğe yazılır.
+## Audio AirPlay (Music, etc.)
 
-**Görüntü tamponu (Wi-Fi titremesi):** Kareler ağdan eşit aralıkla gelmez; geldikleri anda çizilirse görüntü takılır. Tampon, kareleri iPhone'un zaman damgasına göre eşit aralıkla çizer. Varsayılan **otomatik**: uygulama son birkaç saniyenin titremesini ölçüp tamponu 40–160 ms arasında kendisi ayarlar (artış hemen, azalış yavaş). Elle ayar için yansıtma sırasında **YUKARI/AŞAĞI** tuşları (20 ms'lik adımlar, 0–200 ms; 0 kapalı); menüde "Görüntü tamponu" satırında **OK** otomatiğe döner. Tampon görüntüyü geciktirdiği için ses de aynı kadar geciktirilir (senkron bozulmaz), ama her şey o kadar daha geç görünür. Günlükteki `Titreme:` satırı titremenin dağılımını ve tamponu aşan kare sayısını, `Otomatik tampon:` satırı ayar değişimlerini gösterir.
+In apps such as Music, Spotify and Podcasts on the iPhone, choose "TV Alici" from the AirPlay icon and only the audio comes to the TV (ALAC, 44100 Hz, 16-bit, stereo). The audio is decoded with Apple's open-source ALAC decoder under `app/src/main/cpp/alac` and played with a buffer of about 600 ms; since latency does not matter for music, this buffer hides Wi-Fi jitter. Volume, pause and seek (FLUSH) commands from the iPhone are supported. When the iPhone sends song information and cover art, they are shown on the QR screen and on a full-screen **Now playing** screen; lost packets are not re-requested (on a very weak Wi-Fi network you may occasionally hear crackling).
 
-## AirPlay adını değiştirme
+## Audio/video sync
 
-iPhone'un AirPlay listesinde görünen ad varsayılan olarak "TV Alici"dır. Değiştirmek için `http://<cihaz-ip>:8080/name?pin=<PIN>` sayfasını açıp yeni adı yazın (1-32 karakter; adres ana ekranda da yazar). Ad kaydedilir ve servis yeni adla yeniden yayınlanır; iPhone listesi birkaç saniye içinde yenilenir. Telefon/tablette cihazları ayırt etmek için ("Salon TV", "Pixel 8" gibi) kullanışlıdır.
+If the audio is out of sync with the picture while mirroring, adjust it in the [TV menu](#tv-menu) or, while mirroring, with the **RIGHT/LEFT** keys (20 ms per press, at most ±500 ms). If the audio arrives **late** relative to the picture, press RIGHT (the picture is delayed); if it arrives **early**, press LEFT (the audio is delayed). The setting is saved; a short notice appears on screen and is written to the log.
 
-## Bağlantı izni
+**Video buffer (Wi-Fi jitter):** Frames do not arrive over the network at even intervals; if they were drawn the moment they arrive, the picture would stutter. The buffer draws frames at even intervals based on the iPhone's timestamps. The default is **automatic**: the app measures the jitter of the last few seconds and sets the buffer itself between 40 and 160 ms (it grows immediately and shrinks slowly). For manual control, use the **UP/DOWN** keys while mirroring (20 ms steps, 0–200 ms; 0 is off); on the "Video buffer" row of the menu, **OK** returns to automatic. Because the buffer delays the picture, the audio is delayed by the same amount (so sync is preserved), but everything appears that much later. The `Titreme:` line in the log shows the jitter distribution and the number of frames that exceeded the buffer; the `Otomatik tampon:` line shows changes of the automatic setting.
 
-Bilinmeyen bir cihaz AirPlay ile bağlanmak isteyince TV'de **İzin ver / Hep izin ver / Reddet** penceresi çıkar (uzaktan kumandayla ya da dokunarak seçilir). 30 saniye içinde cevap gelmezse ya da reddedilirse bağlantı kesilir ve aynı cihaz 1 dakika boyunca tekrar sorulmaz. "Hep izin ver" cihazın IP adresini kalıcı olarak güvenilir yapar.
+## Changing the AirPlay name
 
-"Hep izin ver" denilen bir cihaz 30 gün hiç bağlanmazsa güveni kendiliğinden kalkar ve bir sonraki bağlantıda yeniden sorulur; düzenli kullanılan cihazın süresi her kullanımda yenilenir.
+The name shown in the iPhone's AirPlay list is "TV Alici" by default. To change it, open `http://<device-ip>:8080/name?pin=<PIN>` and type the new name (1–32 characters; the address is also shown on the home screen). The name is saved and the service is re-advertised under the new name; the iPhone's list refreshes within a few seconds. It is useful for telling devices apart (for example "Living room TV", "Pixel 8").
 
-Güvenilen cihazları görmek ve silmek için iPhone'dan `http://<tv-ip>:8080/trusted?pin=<PIN>` sayfasını açın (adres TV'nin ana ekranında da yazar). Silinen cihaz, açık bağlantısı kapanınca yeniden izin sorar.
+## Connection approval
 
-## Arka planda çalışma ve ses odağı
+When an unknown device tries to connect over AirPlay, an **Allow once / Always allow / Deny** dialog appears on the TV (selected with the remote or by touch). If there is no answer within 30 seconds, or it is denied, the connection is closed and the same device is not asked again for 1 minute. "Always allow" makes the device's IP address permanently trusted.
 
-Uygulama açılınca küçük bir bildirimle ön plan servisi başlatır; böylece uygulamadan çıkınca ya da ekran kapanınca Android süreci öldürmez, müzik kesilmez ve cihaz AirPlay listesinde kalır. Ses ya da yansıtma sürerken CPU ve Wi-Fi kilitleri tutulur (en çok 6 saat, akış bitince bırakılır). Ses başlayınca ses odağı alınır; cihazdaki başka bir uygulamanın sesi kısılır ya da duraklar. Uygulamayı kapatınca (Geri ile çıkış) servis de durur. Android 13 ve üstünde bildirim izni verilmediyse servis yine çalışır ama bildirim görünmeyebilir.
+A device that was set to "Always allow" but does not connect for 30 days loses its trust automatically and is asked again on the next connection; for a device in regular use, the period is renewed on every use.
 
-## Yansıtmada yakınlaştırma
+To see and remove trusted devices, open `http://<tv-ip>:8080/trusted?pin=<PIN>` on the iPhone (the address is also shown on the TV's home screen), or use the [TV menu](#tv-menu). A removed device is asked for permission again once its open connection closes.
 
-Ekran yansıtırken görüntü varsayılan olarak ekrana sığdırılır (kenarlarda siyah boşluk kalabilir). Dokunmatik ekranda iki parmakla sıkıştırarak 4 katına kadar yakınlaştırabilir, yakınlaşınca tek parmakla kaydırabilirsiniz. Dokunmatik olmayan cihazlarda web sayfasının Gönder sekmesindeki **🔍+ / 🔍− / 1×** düğmeleri aynı işi yapar (merkeze doğru yakınlaştırır). Yansıtma bitince ya da yeniden başlayınca yakınlaştırma sıfırlanır.
+## Running in the background and audio focus
 
-## Bağlanan cihaza selam
+When the app starts, it starts a foreground service with a small notification, so Android does not kill the process when you leave the app or the screen turns off: music keeps playing and the device stays in the AirPlay list. While audio or mirroring is running, CPU and Wi-Fi locks are held (at most 6 hours, released when the stream ends). When audio starts, audio focus is requested; the sound of another app on the device is lowered or paused. Quitting the app (leaving with Back) stops the service too. On Android 13 and later, if the notification permission has not been granted, the service still runs but the notification may not be visible.
 
-Bir iPhone ya da iPad ekran yansıtma/ses için bağlanınca TV'de kısa bir 👋 bildirimi cihazın adıyla görünür (ad gelmezse "iPhone").
+## Zoom while mirroring
 
-## Boştayken zıplayan QR
+While mirroring, the picture is fitted to the screen by default (there may be black bars at the edges). On a touch screen you can pinch with two fingers to zoom up to 4×, and drag with one finger once zoomed in. On devices without a touch screen, the **🔍+ / 🔍− / 1×** buttons on the web page's Remote tab do the same (zooming towards the center). The zoom resets when mirroring ends or restarts. The menu also offers a **Fill (crop)** mode instead of **Fit**.
 
-QR ekranı 20 saniye boşta (tuşa basılmadan, dokunulmadan) kalırsa QR kodu ve yazılar eski DVD logosu gibi ekranda sekmeye başlar, duvara çarpınca renk değiştirir ve köşeye tam isabet ederse 🎉 çıkar. Aynı zamanda ekran yanmasını önler. Herhangi bir tuşa basınca ya da dokununca durur ve QR yerine döner; bir bağlantı başlayınca ekran zaten değişir.
+## Greeting the connected device
 
-## TV menüsü
+When an iPhone or iPad connects for screen mirroring or audio, a short 👋 notice with the device's name appears on the TV ("iPhone" if no name arrives). The QR screen also shows the connected device's name and IP address in a green line.
 
-QR ekranındayken ya da ekran yansıtma sırasında kumandanın **MENU** tuşuna basınca ekranda bir menü açılır. **MENU tuşu olmayan kumandalarda (ör. Mi TV Stick) OK (orta) tuşu aynı menüyü açar.** Menü 30 saniye hiçbir tuşa basılmazsa ya da **Geri** ile kapanır.
+## Bouncing QR when idle
 
-| Satır | Değiştirme |
+If the QR screen stays idle for 20 seconds (no key pressed, no touch), the QR code and texts start bouncing around the screen like the old DVD logo, changing color when they hit a wall and showing 🎉 on a perfect corner hit. It also prevents screen burn-in. Pressing any key or touching the screen stops it and returns the QR code to its place; when a connection starts, the screen changes anyway.
+
+## TV menu
+
+While on the QR screen or while mirroring, press the remote's **MENU** key and a menu opens on the screen. **On remotes without a MENU key (for example the Mi TV Stick), the OK (center) key opens the same menu.** The menu closes after 30 seconds without a key press, or with **Back**.
+
+| Row | How to change it |
 |---|---|
-| Açılışta otomatik başlat | SOL/SAĞ/OK açıp kapatır |
-| Uyku zamanlayıcısı | SOL/SAĞ kapalı → 15 → 30 → 60 → 90 → 120 dk, OK kapatır; süre dolunca oynatma ve yansıtma durur, QR ekranına dönülür (yalnızca o oturumda geçerli) |
-| Ses/görüntü kayması | SOL/SAĞ ±20 ms, OK sıfırlar |
-| Görüntü tamponu | SOL/SAĞ ±20 ms (0 = kapalı), OK otomatiğe döner |
-| Yakınlaştırma (yalnızca yansıtırken) | SOL/SAĞ ×1,25, OK 1× |
-| Ekrana sığdırma | SOL/SAĞ/OK: Sığdır ↔ Doldur (kırparak); yansıtırken ve kayıtlı |
-| Saat | SOL/SAĞ/OK: QR ekranındaki saat ve tarih açık/kapalı |
-| İstatistikler | SOL/SAĞ/OK: sağ üstte çözünürlük, kare hızı, tampon, atlanan kare, Wi-Fi sinyali ve bağlı cihaz paneli |
-| Güvenilen cihazlar | SAĞ/OK alt menüyü açar; satırda OK o cihazın güvenini kaldırır (★ kalıcı), Geri ile dönülür |
-| Güncellemeyi kontrol et (kurulu sürüm yazar) | OK: GitHub'daki son sürümü sorar, sonucu ekranda gösterir |
-| Uygulamadan çık | OK (ön plan servisi ve sunucular da durur) |
-| Kapat | OK |
+| Start at boot | LEFT/RIGHT/OK toggles it |
+| Sleep timer | LEFT/RIGHT cycles off → 15 → 30 → 60 → 90 → 120 min, OK turns it off; when the time is up, playback and mirroring stop and the QR screen returns (valid for that session only) |
+| Audio/video sync | LEFT/RIGHT ±20 ms, OK resets |
+| Video buffer | LEFT/RIGHT ±20 ms (0 = off), OK returns to automatic |
+| Zoom (only while mirroring) | LEFT/RIGHT ×1.25, OK resets to 1× |
+| Screen fit | LEFT/RIGHT/OK: Fit ↔ Fill (crop); saved |
+| Clock | LEFT/RIGHT/OK: clock and date on the QR screen on/off |
+| Statistics | LEFT/RIGHT/OK: panel in the top right with resolution, frame rate, buffer, dropped frames, Wi-Fi signal and the connected device |
+| Trusted devices | RIGHT/OK opens a submenu; OK on a row removes that device's trust (★ = permanent), Back returns |
+| Check for updates (shows the installed version) | OK: asks GitHub for the latest version and shows the result on screen |
+| Quit app | OK (the foreground service and servers stop too) |
+| Close | OK |
 
-QR ekranında bağlı iPhone'un adı ve IP'si yeşil bir satırla görünür. Müzik çalarken (kapak ve şarkı bilgisi gelince) tam ekran **"Şimdi çalıyor"** ekranı açılır: büyük kapak, bulanık arka plan, şarkı/sanatçı/albüm; **Geri** tuşu QR ekranına döndürür, sonraki şarkıda yeniden açılır. QR ekranı bekleme saatini de gösterir.
+Navigate with UP/DOWN. On a touch screen, tapping a row acts as "OK/increase" and a long press as "decrease". While the menu is closed, the old shortcuts during mirroring still work: RIGHT/LEFT for audio/video sync, UP/DOWN for the video buffer.
 
-Gezinme YUKARI/AŞAĞI ile yapılır. Dokunmatik ekranda satıra dokunmak "OK/artır", uzun basmak "azalt" işi görür. Menü kapalıyken yansıtma sırasındaki eski kısayollar sürer: SAĞ/SOL ses-görüntü kayması, YUKARI/AŞAĞI görüntü tamponu.
+While music plays (once cover art and song information arrive), a full-screen **Now playing** screen opens: large cover, blurred background, song/artist/album; **Back** returns to the QR screen, and it opens again on the next song. The QR screen also shows an idle clock.
 
-## Açılışta otomatik başlatma
+## Start at boot
 
-"TV açılınca otomatik başlat" ayarı **TV menüsündeki** ilk satırdır (varsayılan kapalı; bkz. [TV menüsü](#tv-menüsü)). Açıkken TV açılışında uygulama kendini başlatır. Android 10 ve sonrasında bazı TV'ler arka plandan ekran açmayı engeller; bu durumda Ayarlar > Uygulamalar > AirPlay for Android > "Diğer uygulamaların üzerinde göster" izni gerekebilir.
+The "Start when the TV turns on" setting is the first row of the [TV menu](#tv-menu) (off by default). When on, the app starts itself when the TV boots. On Android 10 and later, some TVs prevent launching a screen from the background; in that case the "Display over other apps" permission may be needed under Settings > Apps > AirPlay for Android.
 
-## Fotoğraf AirPlay (`/photo`)
+## Photo AirPlay (`/photo`)
 
-Fotoğraflar'da bir fotoğrafı açıp Paylaş > AirPlay > "TV Alici" ile TV'ye gönderin; fotoğraf tam ekran gösterilir. Geri tuşu ya da iPhone'dan durdurma ile QR ekranına dönülür. Slayt gösterisi (`/slideshows`) desteklenmez.
+Open a photo in Photos and send it to the TV with Share > AirPlay > "TV Alici"; the photo is shown full screen. Back, or stopping from the iPhone, returns to the QR screen. Slideshows (`/slideshows`) are not supported.
 
 ## Video AirPlay (`/play`)
 
-Fotoğraflar uygulamasında bir videoyu açıp AirPlay simgesinden "TV Alici"yı seçince video TV'ye gönderilir ve ExoPlayer ile oynatılır (düz MP4 ve HLS). iPhone'un oynat/duraklat/ileri-geri sar komutları desteklenir. Yalnızca `http(s)` adresleri oynatılır; `mlhls://` gibi FairPlay korumalı akışlar (ör. YouTube) desteklenmez. Ekran yansıtmadan farkı: görüntüyü TV kendisi indirip çözer, bu yüzden kalite daha iyi, iPhone pili daha az harcanır.
+Open a video in the Photos app and choose "TV Alici" from the AirPlay icon; the video is sent to the TV and played with ExoPlayer (plain MP4 and HLS). The iPhone's play/pause/skip commands are supported. Only `http(s)` addresses are played; FairPlay-protected streams such as `mlhls://` (for example YouTube) are not supported. The difference from screen mirroring: the TV downloads and decodes the video itself, so the quality is better and the iPhone battery is used less.
 
-AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proje kişisel/deneysel kullanım içindir.
+AirPlay is Apple's proprietary protocol and is not officially licensed; this project is for personal/experimental use.
 
-## Web arayüzü (port 8080)
+## Web interface (port 8080)
 
-Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada olduğu tek bir sayfa açar; üstte PIN alanı, altında sırayla şu bölümler vardır:
+The address shown on the device's screen (`http://<device-ip>:8080`) opens a single page that works like a media-server remote. At the bottom are the **Remote · Send · Settings** tabs (Update and Log are under Settings); at the top, the PIN field and a connection indicator showing the TV's name.
 
-- **TV'ye mesaj:** Yazılan kısa metin TV ekranında 20 saniye büyük yazıyla görünür ("Yemek hazır" gibi); boş gönderince kalkar.
-- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan). Birden fazla video seçilirse ilki hemen oynar, diğerleri sırayla yüklenip bitince otomatik oynatılır; **Sonraki** düğmesi bir sonraki videoya atlar, **Durdur** sırayı da temizler.
-- **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
-- **Uygulamayı güncelle:** Release anahtarıyla imzalı APK'yı tarayıcıdan gönderme (aşağıya bakın).
-- **Günlük:** Uygulama günlüğü (açılır bölüm; **Yenile** ile güncellenir).
+- **Remote:** a "Now playing" card (video name, or song/artist for music; a progress bar you can drag to seek; elapsed/total time), a large play/pause button, ±10 s, a volume slider and mute, Next/Stop, zoom buttons while mirroring, and the queue of waiting videos. The state refreshes every second with `GET /api/status`.
+- **Send:** choose videos and send them from Safari without installing an app. When several videos are chosen, the first plays immediately and the others are uploaded in order and played automatically; the list of chosen files is shown, and the file name is sent to the TV in the `X-Name` header and appears on the "Now playing" card. **Next** skips to the next video and **Stop** also clears the queue.
+- **Play a link (Send tab):** paste the address of a direct (MP4/HLS) video to play it on the TV (`POST /api/play?u=`). On sites where Safari shows no AirPlay icon, copy the code with the **Copy bookmarklet** button and paste it into a bookmark; while on the video page, tap the bookmark and the video's real address is found on the page and sent to the TV. This does not work for `blob:` URLs (MSE, such as YouTube and Netflix) or DRM-protected videos; use screen mirroring for those (DRM content also appears black when mirrored). Note: the video server may reject the TV's request (it has no Referer or cookies).
+- **Message to the TV (Send tab):** the short text you type appears on the TV in large letters for 20 seconds (for example "Dinner is ready"); sending an empty text removes it.
+- **Settings:** change the AirPlay server name and remove trusted devices; **Update** sends a signed APK from the browser (see below); **Log** shows the app log (**Refresh** updates it).
+- **Add to Home Screen:** with Share > Add to Home Screen in Safari, the page opens without the address bar, like an app (the icon and `manifest.json` come from the server). In this full-screen mode the PIN is remembered on the device; in a normal browser tab it is kept only for the session.
 
-Eski adresler çalışmaya devam eder: `/name?pin=<PIN>` ve `/trusted?pin=<PIN>` aynı sayfayı Ayarlar bölümünde açar, `/log?pin=<PIN>` düz metin günlüğü verir.
+The page follows the phone's light/dark setting, and its colors meet WCAG AA contrast (4.5:1).
 
-Güvenlik: PIN istekte `X-Pin` başlığıyla gider (adres çubuğuna yazılmaz). Aynı cihazdan 5 yanlış denemeden sonra 5 dakika boyunca PIN denemesi reddedilir. İsim değiştirme ve cihaz silme gibi değişiklikler `POST` ile yapılır; bir bağlantıya tıklamakla tetiklenemez.
+The old addresses keep working: `/name?pin=<PIN>` and `/trusted?pin=<PIN>` open the same page on the Settings tab, and `/log?pin=<PIN>` returns the log as plain text.
 
-## Web kumandası (yeni arayüz)
+Security: the PIN is sent in the `X-Pin` request header (it is not typed in the address bar). After 5 wrong attempts from the same device, PIN attempts are rejected for 5 minutes. Changes such as renaming and removing a device are made with `POST`; they cannot be triggered by clicking a link.
 
-Web sayfası (`http://<cihaz-ip>:8080`) bir medya sunucusu kumandası gibi çalışır: altta **Kumanda · Gönder · Ayarlar** sekmeleri (Güncelle ve Günlük, Ayarlar'ın altında).
+## Manual update (sending an APK)
 
-- **Kumanda:** "Şu an oynuyor" kartı (video adı ya da müzikte şarkı/sanatçı, ilerleme çubuğu, geçen/toplam süre), büyük oynat/duraklat, ±10 sn, ses kaydırıcısı ve sessize alma, Sonraki/Durdur, yansıtma sırasında yakınlaştırma düğmeleri ve bekleyen videoların sırası. Durum saniyede bir `GET /api/status` ile yenilenir; ilerleme çubuğunu sürükleyerek ileri/geri sarılır.
-- **Gönder:** Seçilen dosyaların listesi görünür; birden fazla video sırayla yüklenir. Dosya adı TV'ye `X-Name` başlığıyla iletilir ve "Şu an oynuyor" kartında görünür.
-- **Bağlantıdan oynat (Gönder sekmesi):** Düz adresli (MP4/HLS) bir videonun adresini yapıştırıp TV'de oynatabilirsiniz (`POST /api/play?u=`). Safari'de AirPlay simgesi çıkmayan sitelerde **Yer imi kodunu kopyala** düğmesiyle alınan kodu bir yer imine yapıştırın; video sayfasındayken yer imine dokununca sayfadaki videonun gerçek adresi bulunup TV'ye gönderilir. `blob:` adresli (YouTube, Netflix gibi MSE) ve DRM'li videolarda adres bulunamaz; onlar için ekran yansıtma kullanılır (DRM'li içerik yansıtmada da siyah görünür). Uyarı: video sunucusu TV'nin isteğini (Referer/çerez olmadan) reddedebilir.
-- **Ana ekrana ekle:** Safari'de Paylaş > Ana Ekrana Ekle ile sayfa adres çubuğu olmadan, uygulama gibi açılır (simge ve `manifest.json` sunucudan gelir). Bu tam ekran modunda PIN cihazda hatırlanır; normal tarayıcı sekmesinde yalnızca oturum boyunca tutulur.
-- Açık ve koyu tema telefonun ayarına göre değişir; renkler WCAG AA kontrastını (4,5:1) sağlar.
+On devices without internet or GitHub access, an APK can be sent from the **Update** section of the web interface. The page also shows the installed version (for example `v33`).
 
-## Elle güncelleme (APK gönderme)
+1. Choose the APK and press **Send APK** (at most 150 MB).
+2. The TV performs the same checks as the automatic update: the package name must be the same, the SHA-256 fingerprint of the signing certificate must match `UPDATE_CERT_SHA256`, and the version must not be older than the installed one. If it is rejected, the reason is shown on the page.
+3. If the checks pass, the system's install screen opens on the TV; confirm with the remote. Nothing is installed without this confirmation.
 
-İnternet ya da GitHub erişimi olmayan cihazlarda, web arayüzündeki **Uygulamayı güncelle** bölümünden APK gönderilebilir. Sayfa kurulu sürümü de gösterir (ör. `v33`).
+Notes: the app must be open on the TV (on the QR screen). If the app has not been given the "install unknown apps" permission, a permission screen opens on the TV; grant it and send the APK again. Builds signed with another key (for example local/debug builds) are rejected.
 
-1. APK'yı seçip **APK gönder**'e basın (en fazla 150 MB).
-2. TV, otomatik güncellemeyle aynı kontrolü yapar: paket adı aynı olmalı, imza sertifikasının SHA-256 parmak izi `UPDATE_CERT_SHA256` ile eşleşmeli ve sürüm kurulu sürümden eski olmamalı. Reddedilirse nedeni sayfada yazar.
-3. Kontrol geçerse TV'de sistemin kurulum ekranı açılır; kumandayla onaylayın. Bu onay olmadan kurulum yapılmaz.
+## Debugging
 
-Notlar: Uygulama TV'de açık (QR ekranında) olmalıdır. Uygulamaya "bilinmeyen kaynaklardan yükleme" izni verilmemişse TV'de izin ekranı açılır; izni verip APK'yı tekrar gönderin. Başka anahtarla imzalı (ör. yerel/debug) derlemeler reddedilir.
-
-## Hata ayıklama
-
-- Günlük TV ekranında gösterilmez, yalnızca web sayfasından okunur.
-- iPhone'dan `http://<tv-ip>:8080/log?pin=<PIN>` adresi tüm günlüğü gösterir.
+- The log is not shown on the TV screen; it can only be read from the web page.
+- On the iPhone, `http://<tv-ip>:8080/log?pin=<PIN>` shows the whole log.
