@@ -153,6 +153,10 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_ENDED && !airplayVideoActive && uploadQueue.isNotEmpty()) {
+                        playNext()
+                        return
+                    }
                     if (!airplayVideoActive) return
                     if (state == Player.STATE_READY && (pendingStartSec >= 0 || pendingStartFrac >= 0)) {
                         val dur = p.duration
@@ -479,7 +483,35 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
     }
 
     /** Yukleme bitmeden oynatmaya baslar: dosya buyudukce okunur. */
+    // Web sayfasindan yuklenen videolarin sirasi (X-Queue: 1 ile gelenler).
+    private val uploadQueue = ArrayDeque<Upload>()
+    private var currentUpload: Upload? = null
+
     private fun play(upload: Upload) {
+        val p = player
+        val busy = p != null && currentUpload != null && !airplayVideoActive &&
+            p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED
+        if (upload.queued && busy) {
+            uploadQueue.addLast(upload)
+            appendLog("Kuyruğa eklendi (${uploadQueue.size} bekliyor)")
+            return
+        }
+        uploadQueue.clear()
+        start(upload)
+    }
+
+    /** Siradaki videoya gecer; sira bossa false doner. */
+    private fun playNext(): Boolean {
+        val next = uploadQueue.removeFirstOrNull() ?: return false
+        val old = currentUpload
+        start(next)
+        if (old != null && old !== next) runCatching { old.file.delete() }
+        appendLog("Sıradaki video (${uploadQueue.size} bekliyor)")
+        return true
+    }
+
+    private fun start(upload: Upload) {
+        currentUpload = upload
         overlayView.visibility = android.view.View.GONE
         val factory = DataSource.Factory { GrowingFileDataSource(upload) }
         val source = ProgressiveMediaSource.Factory(factory)
@@ -509,7 +541,12 @@ class MainActivity : AppCompatActivity(), VideoEvents, NameAdmin {
             "voldown" -> audio.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI
             )
+            "next" -> if (!playNext()) {
+                p.stop()
+                overlayView.visibility = android.view.View.VISIBLE
+            }
             "stop" -> {
+                uploadQueue.clear()
                 p.stop()
                 overlayView.visibility = android.view.View.VISIBLE
             }

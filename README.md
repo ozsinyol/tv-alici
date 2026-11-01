@@ -78,7 +78,7 @@ AirPlay protokolü Apple'a aittir ve resmî olarak lisanslanmamıştır; bu proj
 
 Cihazın ekranındaki adres (`http://<cihaz-ip>:8080`) her şeyin bir arada olduğu tek bir sayfa açar; üstte PIN alanı, altında sırayla şu bölümler vardır:
 
-- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan).
+- **Gönder:** Video seçip gönderme ve oynatma kumandası (Safari'den, uygulama kurmadan). Birden fazla video seçilirse ilki hemen oynar, diğerleri sırayla yüklenip bitince otomatik oynatılır; **Sonraki** düğmesi bir sonraki videoya atlar, **Durdur** sırayı da temizler.
 - **Ayarlar:** AirPlay sunucu adını değiştirme ve güvenilen cihazları silme.
 - **Uygulamayı güncelle:** Release anahtarıyla imzalı APK'yı tarayıcıdan gönderme (aşağıya bakın).
 - **Günlük:** Uygulama günlüğü (açılır bölüm; **Yenile** ile güncellenir).
