@@ -35,7 +35,7 @@ class AirPlayService : Service() {
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this)
         val n = builder
             .setContentTitle(applicationInfo.loadLabel(packageManager))
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_airplay)
             .setContentIntent(open)
             .setOngoing(true)
             .build()
